@@ -1,0 +1,82 @@
+PROJECT(Holograms)
+
+#SET BUILD-TYPE TO RELEASE IF NOT DEFINED
+if(NOT CMAKE_BUILD_TYPE)
+	set(CMAKE_BUILD_TYPE Release)
+endif(NOT CMAKE_BUILD_TYPE)
+set(ARCH "x86_64")
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/")
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if(NOT CMAKE_BUILD_TYPE MATCHES "^[Dd][Ee][Bb][Uu][Gg]")
+        add_definitions(-DQT_NO_DEBUG_OUTPUT)
+        set(CMAKE_BUILD_RELEASE TRUE)
+else()
+        set(CMAKE_BUILD_RELEASE FALSE)
+endif()
+
+if(MSVC OR MSVC_IDE) 
+  message( "VC11: use Microsoft Visual Studio 2013 " 
+      "with Microsoft Visual C++ Compiler Nov 2012 CTP (v120p_xp)" ) 
+    set(CMAKE_GENERATOR_TOOLSET   "v120_xp" CACHE STRING "Platform Toolset" FORCE) 
+    set(CMAKE_VS_PLATFORM_TOOLSET  "v120_xp" CACHE STRING "Platform Toolset" FORCE) 
+endif()
+
+if(APPLE AND CMAKE_INSTALL_PREFIX MATCHES "/usr/local")
+        set(CMAKE_INSTALL_PREFIX "/Applications")
+endif()
+
+set(CMAKE_C_FLAGS_RELEASE "-O3")
+
+if(CMAKE_COMPILER_IS_GNUCXX OR APPLE)
+       add_definitions( -Wno-deprecated-register)
+endif()
+
+message(STATUS "Building ${PROJECT_NAME} in ${CMAKE_BUILD_TYPE} mode")
+cmake_minimum_required(VERSION 2.8.8)
+
+#ADD OPENCV SUPPORT
+FIND_PACKAGE( OpenCV REQUIRED )
+
+# Set some Win32 Specific Settings
+OPTION(WITH_CONSOLE "Build with a command line for debugging" OFF)
+
+IF(WIN32)
+	IF(WITH_CONSOLE)
+		ADD_DEFINITIONS(-DWITH_CONSOLE)
+	ELSE()
+		SET(GUI_TYPE WIN32)
+	ENDIF()
+ENDIF(WIN32)
+
+#ADD_DEFINITIONS(${QT_DEFINITIONS})
+
+SET(CMAKE_CURRENT_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR} ${OPENCV_INCLUDE_DIRS})
+
+#SET GENERIC HEADER AND SOURCE FILES
+SET(HEADERS 
+	src/Socket.h
+)
+
+SET(SOURCES
+	src/main.cpp
+	src/Socket.cpp
+)
+
+SOURCE_GROUP(_CORE FILES ${HEADERS} ${SOURCES})
+
+SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/bin)
+
+
+#BUILD AND LINK
+ADD_EXECUTABLE(${PROJECT_NAME} ${GUI_TYPE}
+		${SOURCES} 
+		${HEADERS}
+)
+
+IF (APPLE)
+  add_dependencies(${PROJECT_NAME} osx_bundle_dirs )
+ENDIF (APPLE)
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} ${OpenCV_LIBS})
