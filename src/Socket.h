@@ -37,7 +37,9 @@ public:
 	void sendMessage(std::string);
 	std::string receiveMessage();
 	cv::Mat receiveImage();
-	
+	void receiveImageData(int depth, float* data);
+	void setOutputMode(int mode);
+	void setImage(std::string filename);
 
 private:
 

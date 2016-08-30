@@ -3,6 +3,8 @@
 #include "Socket.h"
 #include <iostream>
 
+#define MAX_FLUSH_CYCLE 10
+
 Socket::Socket(const std::string& serverIP, const std::string& serverPort)
 {
 	printf("client: connecting...\n");
@@ -54,7 +56,7 @@ Socket::Socket(const std::string& serverIP, const std::string& serverPort)
 	}
 
 	printf("client: connected\n");
-	int iTimeout = 1000;
+	int iTimeout = 300;
 	int out = setsockopt(sockfd,
 		SOL_SOCKET,
 		SO_RCVTIMEO,
@@ -118,6 +120,9 @@ Socket::Socket(const std::string& serverIP, const std::string& serverPort)
 	_socketFD = sockfd;
 
 #endif
+
+	//set Api version
+	sendMessage("SET_API_VERSION 2\n");
 }
 
 Socket::~Socket()
@@ -223,4 +228,109 @@ cv::Mat Socket::receiveImage()
 	delete[] data;
 
 	return out_image;
+}
+
+void Socket::receiveImageData(int depth, float* data)
+{
+	std::vector<std::string> strings;
+	int datasize;
+
+	std::string message = "STREAM_RECONSTRUCTION " + std::to_string(depth) + "\n0\n";
+	bool dataReady = false;
+	
+	sendMessage(message);
+
+	//receive data
+	std::string reply;
+		
+	while (strings.size() <=2 || datasize > strings[2].size())
+	{
+		strings.clear();
+		std::string reply2;
+			
+		while (reply2.empty()){
+			reply2 = receiveMessage();
+			reply += reply2;
+		}
+
+		//parse data
+		std::string::size_type prev_pos = 0, pos = 0;
+
+		pos = reply.find('\n', pos);
+		strings.push_back(reply.substr(prev_pos, pos - prev_pos));
+		prev_pos = ++pos;
+
+		pos = reply.find('\n', pos);
+		strings.push_back(reply.substr(prev_pos, pos - prev_pos));
+		prev_pos = ++pos;
+
+		strings.push_back(reply.substr(prev_pos, reply.size() - prev_pos));
+
+		int width = atoi(strings[0].substr(22, 4).c_str());
+		int height = atoi(strings[0].substr(27, 4).c_str());
+		datasize = atoi(strings[1].c_str());
+	}
+
+	//convert endianess
+	char* dataBigEndian = const_cast<char*> (strings[2].c_str());
+
+	int * ptr_org = (int*)dataBigEndian;
+	int * ptr_dest = (int*)data;
+
+	for (int i = 0; i < datasize / 4; i++, ptr_org++, ptr_dest++)
+	{
+		*ptr_dest = (*ptr_org << 24) |
+			((*ptr_org << 8) & 0x00ff0000) |
+			((*ptr_org >> 8) & 0x0000ff00) |
+			((*ptr_org >> 24) & 0x000000ff);
+	}
+}
+
+void Socket::setOutputMode(int mode)
+{
+	//flush leftover
+	int count = 0;
+	while (count < MAX_FLUSH_CYCLE){
+		receiveMessage();
+		count++;
+	}
+
+	//set to phase images
+	sendMessage("OUTPUT_MODE " + std::to_string(mode) + "\n0\n");
+	std::string reply;
+	while (reply.empty()){
+		reply = receiveMessage();
+	}
+	if (reply.size() < 100){
+		std::cout << reply << std::endl;
+	}
+	else
+	{
+		std::cout << "Discard old data " << reply.size() << std::endl;
+	}
+
+	//flush receive
+	count = 0;
+	while (count < MAX_FLUSH_CYCLE){
+		receiveMessage();
+		count++;
+	}
+}
+
+void Socket::setImage(std::string filename)
+{
+	sendMessage("RECONSTRUCT_HOLOGRAMS " + filename + "\n0\n");
+
+	std::string reply;
+	while (reply.empty()){
+		reply = receiveMessage();
+	}
+
+	if (reply.size() < 100){
+		std::cout << reply << std::endl;
+	}
+	else
+	{
+		std::cout << "Discard old data " << reply.size() << std::endl;
+	}
 }
