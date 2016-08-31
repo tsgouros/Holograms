@@ -19,6 +19,7 @@
 #include "Socket.h"
 
 #include <windows.h>
+#include <chrono>
 
 #include <opencv2/core.hpp>
 #include "opencv2/imgproc.hpp"
@@ -36,13 +37,18 @@ bool doRefine = true;
 bool doWriteImages = false;
 bool doGenerateDepthMaximum = false;
 bool doMergebounds = true;
+bool usePhase = true;
+
+int maxAmplitude = 5.0;
+double minAll = std::numeric_limits<double>::max();
+double maxAll = std::numeric_limits<double>::min();
 
 //remote
 bool online = true;
 std::string datafolder = "C:/holograms";
 std::string filename = "flowcam_akashiwo_july24-0g-4us_24-Jul-2015_15-03-43-719.bmp";
-//std::string ip = "10.12.160.99";
-std::string ip = "127.0.0.1";
+std::string ip = "10.12.160.99";
+//std::string ip = "127.0.0.1";
 
 std::string port = "1975";
 Socket *sock = NULL;
@@ -62,7 +68,7 @@ int height = 2048;
 int windowsize = 5;
 
 //contours
-float max_threshold = 1.5;
+float max_threshold = 0.45;
 double contour_minArea = 15.0;
 
 float merge_threshold_depth = 400;
@@ -111,6 +117,11 @@ void loadImages(std::vector<cv::Mat> &phase_images,
 
 			cv::Mat image(cv::Size(width, height), CV_32FC1, data);
 
+			double Min, Max;
+			cv::minMaxLoc(image, &Min, &Max);
+			minAll = (minAll > Min) ? Min : minAll;
+			maxAll = (maxAll < Max) ? Max : maxAll;
+
 			//remove borders:
 			int size = 100;
 			if (d < 3000){
@@ -121,12 +132,15 @@ void loadImages(std::vector<cv::Mat> &phase_images,
 				size = 150;
 			}
 
+
+			float val = (!usePhase) ? Max : Min;
+
 			if (size > 0)
-			{
-				image(cv::Rect(0, 0, size, image.rows)) = 0.0;
-				image(cv::Rect(0, 0, image.cols, size)) = 0.0;
-				image(cv::Rect(image.cols - size, 0, size, image.rows)) = 0.0;
-				image(cv::Rect(0, image.rows - size, image.cols, size)) = 0.0;
+			{		
+				image(cv::Rect(0, 0, size, image.rows)) = val;
+				image(cv::Rect(0, 0, image.cols, size)) = val;
+				image(cv::Rect(image.cols - size, 0, size, image.rows)) = val;
+				image(cv::Rect(0, image.rows - size, image.cols, size)) = val;
 			}
 
 			if (show)
@@ -159,7 +173,8 @@ void loadImages(std::vector<cv::Mat> &phase_images,
 cv::Mat findMaximas(std::vector<cv::Mat> phase_images,
 					std::vector<int> depths, int start, int stop, int step_width, cv::Mat &maxDepths)
 {
-	cv::Mat image_maximum(cv::Size(width, height), CV_32FC1, cvScalar(0.));
+	float val = (usePhase) ? minAll : maxAll;
+	cv::Mat image_maximum(cv::Size(width, height), CV_32FC1, cvScalar(val));
 
 	if (show)
 	{
@@ -178,7 +193,12 @@ cv::Mat findMaximas(std::vector<cv::Mat> phase_images,
 
 		//compute max
 		if (!doGenerateDepthMaximum){
-			image_maximum = cv::max(image_maximum, image_tmp);
+			if (usePhase){
+				image_maximum = cv::max(image_maximum, image_tmp);
+			} else
+			{
+				image_maximum = cv::min(image_maximum, image_tmp);
+			}
 		} 
 		else
 		{
@@ -188,7 +208,8 @@ cv::Mat findMaximas(std::vector<cv::Mat> phase_images,
 
 			for (int i = 0; i < width * height; i++, max_ptr++, image_ptr++, depth_ptr++)
 			{
-				if (*max_ptr < *image_ptr && *image_ptr){
+				if ((usePhase && *max_ptr < *image_ptr && *image_ptr) ||
+					!usePhase && *max_ptr > *image_ptr && *image_ptr){
 					*max_ptr = *image_ptr;
 					*depth_ptr = (float)d;
 				}
@@ -217,8 +238,18 @@ cv::Mat findMaximas(std::vector<cv::Mat> phase_images,
 
 void findContours(std::string outdir, cv::Mat image_maximum, cv::Mat image_maximumDepth, std::vector<std::vector<Point> > &contours, std::vector<cv::Rect> &bounds)
 {
+
+	normalize(image_maximum, image_maximum, 0.0, 1.0, CV_MINMAX);
+	
 	//threshold
-	threshold(image_maximum, image_maximum, max_threshold, 1., CV_THRESH_BINARY);
+	if (usePhase){
+		threshold(image_maximum, image_maximum, 1.0 - max_threshold, 1., CV_THRESH_BINARY);
+	} 
+	else
+	{
+		threshold(image_maximum, image_maximum, max_threshold, 1., CV_THRESH_BINARY_INV);
+	}
+
 	//convert to 8U
 	cv::Mat bw;
 	image_maximum.convertTo(bw, CV_8U);
@@ -293,7 +324,7 @@ void findContours(std::string outdir, cv::Mat image_maximum, cv::Mat image_maxim
 	}
 }
 
-void setContourDepth(std::vector<cv::Mat> phase_images, std::vector<int> depths, std::vector<cv::Rect> bounds, std::vector<int> &depths_contour
+void setContourDepth(std::vector<cv::Mat> phase_images, std::vector<int> depths, std::vector<cv::Rect> bounds, std::vector<int> &depths_contour, std::vector<double> &vals_contour
 	, int start, int stop, int step_width, int id = -1)
 {
 	int start_c = (id == -1) ? 0 : id;
@@ -303,25 +334,27 @@ void setContourDepth(std::vector<cv::Mat> phase_images, std::vector<int> depths,
 	{
 		std::cout << "Contour " << c << std::endl;
 		int best_depth = 0;
-		float maxVal = 0;
+		float maxVal = (usePhase) ? minAll : maxAll;
 
 		for (int d = start; d <= stop; d += step_width){
 			int idx = getIdxDepth(depths, d);
 
 			cv::Mat roi = phase_images[idx](bounds[c]);
 			float val = sum(roi)[0] / bounds[c].area();
-			if (val > maxVal)
+			if ((usePhase && val > maxVal) || 
+				(!usePhase && val < maxVal))
 			{
 				maxVal = val;
 				best_depth = depths[idx];
 			}
 		}
 		depths_contour[c] = best_depth;
+		vals_contour[c] = maxVal;
 		std::cout << "Best Depth " << best_depth << std::endl;
 	}
 }
 
-void saveROI(std::string outdir, std::vector<cv::Rect> bounds, std::vector<int> depths_contour)
+void saveROI(std::string outdir, std::vector<cv::Rect> bounds, std::vector<int> depths_contour, int mode)
 {	
 	for (size_t c = 0; c < bounds.size(); c++)
 	{
@@ -363,7 +396,11 @@ void saveROI(std::string outdir, std::vector<cv::Rect> bounds, std::vector<int> 
 		normalize(roi, image_display, 0, 255, CV_MINMAX);
 		image_display.convertTo(drawing, CV_8U);
 
-		imwrite(outdir + "//contours_" + std::to_string(c) + ".png", drawing);
+		if (mode == 1){
+			imwrite(outdir + "//contours_" + std::to_string(c) + ".png", drawing);
+		} else if (mode == 2){
+			imwrite(outdir + "//contoursPhase_" + std::to_string(c) + ".png", drawing);
+		}
 
 		if (show)
 		{
@@ -377,7 +414,7 @@ void saveROI(std::string outdir, std::vector<cv::Rect> bounds, std::vector<int> 
 	}
 }
 
-void writeReport(std::string outdir, std::vector<cv::Rect> bounds, std::vector<int> depths_contour)
+void writeReport(std::string outdir, std::vector<cv::Rect> bounds, std::vector<int> depths_contour, std::vector<double> vals_contour, double time)
 {
 
 	std::ifstream infile;
@@ -411,6 +448,7 @@ void writeReport(std::string outdir, std::vector<cv::Rect> bounds, std::vector<i
 	outfile << "<FILENAME>" << filename << "</FILENAME>" << std::endl;
 	outfile << "<CONTOURIMAGE>contours.png</CONTOURIMAGE>" << std::endl;
 	outfile << "<MAXIMAGE>maximum.png</MAXIMAGE>" << std::endl;
+	outfile << "<TIME>" << time << "</TIME>" << std::endl;
 
 	for (size_t c = 0; c < bounds.size(); c++)
 	{
@@ -421,93 +459,15 @@ void writeReport(std::string outdir, std::vector<cv::Rect> bounds, std::vector<i
 		outfile << "<WIDTH>" << bounds[c].width << "</WIDTH>" << std::endl;
 		outfile << "<HEIGHT>" << bounds[c].height << "</HEIGHT>" << std::endl;
 		outfile << "<DEPTH>" << depths_contour[c] << "</DEPTH>" << std::endl;
+		outfile << "<VAL>" << vals_contour[c] << "</VAL>" << std::endl;
 		outfile << "<IMAGE>" << "contours_" + std::to_string(c) + ".png" << "</IMAGE>" << std::endl;
+		outfile << "<IMAGEPHASE>" << "contoursPhase_" + std::to_string(c) + ".png" << "</IMAGEPHASE>" << std::endl;
 		outfile << "</ROI>" << std::endl;
 	}
 	outfile << "</DATA>" << std::endl;
 	outfile << "</doc>" << std::endl;
 
 	outfile.close();
-}
-
-void requestAndDisplayImage(int depth)
-{
-	float* data = new float[width * height];
-	sock->receiveImageData(depth, data);
-	cv::Mat image(cv::Size(width, height), CV_32FC1, data);
-
-
-	cv::Mat image_normed;
-	cv::Mat imageU8;
-	normalize(image, image_normed, 0, 255, CV_MINMAX);
-	image_normed.convertTo(imageU8, CV_8U);
-
-	imshow("Image", imageU8);
-	cv::waitKey(0);
-	destroyWindow("Image");
-
-	image.release();
-	delete[] data;
-}
-
-void testCommunication()
-{
-	sock = new Socket(ip, port);
-
-	std::string hologram = datafolder + "/" + filename;
-	std::cout << "Loading " << hologram << std::endl;
-	sock->setImage(hologram);
-
-	if (online)
-	{
-		sock->setOutputMode(2);
-	}
-
-	requestAndDisplayImage(2000);
-	requestAndDisplayImage(4000);
-
-	if (online)
-	{
-		sock->setOutputMode(1);
-	}
-
-	requestAndDisplayImage(2000);
-	requestAndDisplayImage(4000);
-
-	if (online)
-	{
-		sock->setOutputMode(2);
-	}
-
-	requestAndDisplayImage(2000);
-	requestAndDisplayImage(4000);
-
-	std::cout << "Loading " << hologram << std::endl;
-	sock->setImage(hologram);
-
-	if (online)
-	{
-		sock->setOutputMode(2);
-	}
-
-	requestAndDisplayImage(2000);
-	requestAndDisplayImage(4000);
-
-	if (online)
-	{
-		sock->setOutputMode(1);
-	}
-
-	requestAndDisplayImage(2000);
-	requestAndDisplayImage(4000);
-
-	if (online)
-	{
-		sock->setOutputMode(2);
-	}
-
-	requestAndDisplayImage(2000);
-	requestAndDisplayImage(4000);
 }
 
 bool DoBoxesIntersect(cv::Rect a, cv::Rect b) {
@@ -518,7 +478,7 @@ bool DoBoxesIntersect(cv::Rect a, cv::Rect b) {
 	return true; // boxes overlap
 }
 
-bool mergebounds(std::vector<cv::Rect> &bounds, std::vector<int> &depths_contour)
+bool mergebounds(std::vector<cv::Rect> &bounds, std::vector<int> &depths_contour, std::vector<double> &vals_contour)
 {
 	std::cerr << "Test Intersect" << std::endl;
 
@@ -539,10 +499,10 @@ bool mergebounds(std::vector<cv::Rect> &bounds, std::vector<int> &depths_contour
 				bounds[c].height = y_max - bounds[c].y;
 
 				depths_contour[c] = (depths_contour[c] + depths_contour[k]) * 0.5;
-
+				vals_contour[c] = (vals_contour[c] + vals_contour[k]) * 0.5;
 				bounds.erase(bounds.begin() + k);
 				depths_contour.erase(depths_contour.begin() + k);
-
+				vals_contour.erase(vals_contour.begin() + k);
 				k = k - 1;
 				merged = true;
 			}
@@ -553,6 +513,9 @@ bool mergebounds(std::vector<cv::Rect> &bounds, std::vector<int> &depths_contour
 
 int main(int argc, char** argv)
 {
+
+	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
 	if (argc > 1)
 	{
 		filename = std::string(argv[1]);
@@ -574,7 +537,13 @@ int main(int argc, char** argv)
 
 		if (online)
 		{
-			sock->setOutputMode(2);
+			if (usePhase){
+				sock->setOutputMode(2);
+			} 
+			else
+			{
+				sock->setOutputMode(1);
+			}
 		}
 	}
 
@@ -624,15 +593,19 @@ int main(int argc, char** argv)
 	
 	findContours(outdir, image_maximum, image_maximumDepth, contours, bounds);
 
+////////Split Bounds
+
 ////////Find best depth for contour
 	std::vector<int> depths_contour;
+	std::vector<double> val_contour;
 
 	depths_contour.resize(contours.size());
-	setContourDepth(phase_images, depths, bounds, depths_contour, min_depth, max_depth, step_size);
+	val_contour.resize(contours.size());
+	setContourDepth(phase_images, depths, bounds, depths_contour, val_contour, min_depth, max_depth, step_size);
 
 //merge bounds
 	if (doMergebounds){
-		while (!mergebounds(bounds, depths_contour));
+		while (mergebounds(bounds, depths_contour, val_contour));
 
 		RNG rng(12345);
 		Mat drawing = Mat::zeros(cv::Size(width, height), CV_8UC3);
@@ -667,19 +640,29 @@ int main(int argc, char** argv)
 			//step 1
 			loadImages(phase_images, phase_images_data, depths, depths_contour[c] - step_size, depths_contour[c] + step_size, step_size / 10);
 
-			setContourDepth(phase_images, depths, bounds, depths_contour, depths_contour[c] - step_size, depths_contour[c] + step_size, step_size / 10, c);
+			setContourDepth(phase_images, depths, bounds, depths_contour, val_contour, depths_contour[c] - step_size, depths_contour[c] + step_size, step_size / 10, c);
 			
 		}
 	}
 ////////Save ROIs
 	if (online)
 	{
+		if (!usePhase){
+			sock->setOutputMode(2);
+		}
+	}
+	saveROI(outdir, bounds, depths_contour,2);
+
+	if (online)
+	{
 		sock->setOutputMode(1);
 	}
-	saveROI(outdir, bounds, depths_contour);
+	saveROI(outdir, bounds, depths_contour,1);
 
 ////////Create Report
-	writeReport(outdir, bounds, depths_contour);
+	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+
+	writeReport(outdir, bounds, depths_contour, val_contour, std::chrono::duration_cast<std::chrono::minutes>(end - begin).count());
 	
 ////////Cleanup
 
