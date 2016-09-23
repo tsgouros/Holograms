@@ -6,23 +6,28 @@
 
 #ifdef _MSC_VER
 #define _CRT_SECURE_NO_WARNINGS
-#endif
 
-#ifdef _MSC_VER 
 #ifndef WITH_CONSOLE
 #pragma comment(linker, "/SUBSYSTEM:windows /ENTRY:mainCRTStartup")
 #endif
+
+#include <windows.h>
+#else
+
+#include <sys/stat.h>
+#include <sys/types.h>
+
 #endif
 
 #include <iostream>
 #include <fstream>
 #include "Socket.h"
 
-#include <windows.h>
 #include <chrono>
+#include <ctime>
 
-#include <opencv2/core.hpp>
-#include "opencv2/imgproc.hpp"
+#include <opencv2/core/core.hpp>
+#include "opencv2/imgproc/imgproc.hpp"
 #include <opencv2/highgui/highgui.hpp>
 using namespace cv;
 
@@ -45,10 +50,15 @@ double maxAll = std::numeric_limits<double>::min();
 
 //remote
 bool online = true;
+#ifdef WIN32
 std::string datafolder = "C:/holograms";
-std::string filename = "flowcam_akashiwo_july24-0g-4us_24-Jul-2015_15-03-43-719.bmp";
 std::string ip = "10.12.160.99";
-//std::string ip = "127.0.0.1";
+#else
+std::string datafolder = "";
+std::string ip = "172.20.160.24";
+#endif
+
+std::string filename = "flowcam_akashiwo_july24-0g-4us_24-Jul-2015_15-03-43-719.bmp";
 
 std::string port = "1975";
 Socket *sock = NULL;
@@ -100,7 +110,7 @@ void loadImages(std::vector<cv::Mat> &phase_images,
 				sock->receiveImageData(d, data);
 
 				if (doWriteImages){
-					std::string name = datafolder + "//Phase_" + std::to_string(d) + ".ext";
+				  std::string name = datafolder + "//Phase_" + std::to_string(static_cast<long long>(d)) + ".ext";
 					FILE* file = fopen(name.c_str(), "wb");
 					fwrite(data, sizeof(float), width * height, file);
 					fclose(file);
@@ -109,7 +119,7 @@ void loadImages(std::vector<cv::Mat> &phase_images,
 			else
 			{
 				//std::string name = datafolder + "//Phase_" + std::to_string(d) + ".ext";
-				std::string name = "data//EN_581_cast_7__15-Jun-2016_01-07-21-715//Phase_" + std::to_string(d) + ".ext";
+			  std::string name = "data//EN_581_cast_7__15-Jun-2016_01-07-21-715//Phase_" + std::to_string(static_cast<long long>(d)) + ".ext";
 				FILE* file = fopen(name.c_str(), "rb");
 				fread(data, sizeof(float), width * height, file);
 				fclose(file);
@@ -311,7 +321,7 @@ void findContours(std::string outdir, cv::Mat image_maximum, cv::Mat image_maxim
 		Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
 		drawContours(drawing, contours, i, color, -1, 8, 0, 0, Point());
 		rectangle(drawing, bounds[i].tl(), bounds[i].br(), color, 2, 8, 0);
-		putText(drawing, std::to_string(i), bounds[i].br(),
+		putText(drawing, std::to_string(static_cast<long long>(i)), bounds[i].br(),
 			FONT_HERSHEY_COMPLEX_SMALL, 2, color, 1, CV_AA);
 	}
 
@@ -358,7 +368,7 @@ void saveROI(std::string outdir, std::vector<cv::Rect> bounds, std::vector<int> 
 {	
 	for (size_t c = 0; c < bounds.size(); c++)
 	{
-		std::cout << "Save Contour " << c << " at depth " << std::to_string(depths_contour[c]) << std::endl;
+	  std::cout << "Save Contour " << c << " at depth " << std::to_string(static_cast<long long>(depths_contour[c])) << std::endl;
 
 		float* data = new float[width * height];
 
@@ -369,7 +379,7 @@ void saveROI(std::string outdir, std::vector<cv::Rect> bounds, std::vector<int> 
 		}
 		else
 		{
-			std::string name = "d:\\data//Amplitude_" + std::to_string(depths_contour[c]) + ".ext";
+		  std::string name = "d:\\data//Amplitude_" + std::to_string(static_cast<long long>(depths_contour[c])) + ".ext";
 			//std::string name = datafolder + "//Amplitude_" + std::to_string(depths_contour[c]) + ".ext";
 
 			FILE* file = fopen(name.c_str(), "rb");
@@ -397,9 +407,9 @@ void saveROI(std::string outdir, std::vector<cv::Rect> bounds, std::vector<int> 
 		image_display.convertTo(drawing, CV_8U);
 
 		if (mode == 1){
-			imwrite(outdir + "//contours_" + std::to_string(c) + ".png", drawing);
+		  imwrite(outdir + "//contours_" + std::to_string(static_cast<long long>(c)) + ".png", drawing);
 		} else if (mode == 2){
-			imwrite(outdir + "//contoursPhase_" + std::to_string(c) + ".png", drawing);
+		  imwrite(outdir + "//contoursPhase_" + std::to_string(static_cast<long long>(c)) + ".png", drawing);
 		}
 
 		if (show)
@@ -460,8 +470,8 @@ void writeReport(std::string outdir, std::vector<cv::Rect> bounds, std::vector<i
 		outfile << "<HEIGHT>" << bounds[c].height << "</HEIGHT>" << std::endl;
 		outfile << "<DEPTH>" << depths_contour[c] << "</DEPTH>" << std::endl;
 		outfile << "<VAL>" << vals_contour[c] << "</VAL>" << std::endl;
-		outfile << "<IMAGE>" << "contours_" + std::to_string(c) + ".png" << "</IMAGE>" << std::endl;
-		outfile << "<IMAGEPHASE>" << "contoursPhase_" + std::to_string(c) + ".png" << "</IMAGEPHASE>" << std::endl;
+		outfile << "<IMAGE>" << "contours_" + std::to_string(static_cast<long long>(c)) + ".png" << "</IMAGE>" << std::endl;
+		outfile << "<IMAGEPHASE>" << "contoursPhase_" + std::to_string(static_cast<long long>(c)) + ".png" << "</IMAGEPHASE>" << std::endl;
 		outfile << "</ROI>" << std::endl;
 	}
 	outfile << "</DATA>" << std::endl;
@@ -522,7 +532,12 @@ int main(int argc, char** argv)
 	}
 
 	std::string outdir = outputfolder + "//" + filename;
+
+#ifdef _MSC_VER
 	CreateDirectory(outdir.c_str(), NULL);
+#else
+	mkdir(outdir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+#endif
 
 	//establish communication
 	if (online)
@@ -619,7 +634,7 @@ int main(int argc, char** argv)
 		{
 			Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
 			rectangle(drawing, bounds[i].tl(), bounds[i].br(), color, 2, 8, 0);
-			putText(drawing, std::to_string(i), bounds[i].br(),
+			putText(drawing, std::to_string(static_cast<long long>(i)), bounds[i].br(),
 				FONT_HERSHEY_COMPLEX_SMALL, 2, color, 1, CV_AA);
 		}
 		
