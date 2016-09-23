@@ -2,7 +2,7 @@
 #define SOCKET_H
 
 #include <string>
-#include <opencv2/core.hpp>
+#include <opencv2/core/core.hpp>
 
 #ifdef WIN32
 	#include <winsock2.h>
@@ -40,6 +40,7 @@ public:
 	void receiveImageData(int depth, float* data);
 	void setOutputMode(int mode);
 	void setImage(std::string filename);
+	void *get_in_addr2(struct sockaddr *sa);
 
 private:
 

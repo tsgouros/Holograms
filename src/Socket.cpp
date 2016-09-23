@@ -5,6 +5,20 @@
 
 #define MAX_FLUSH_CYCLE 10
 
+#ifndef WIN32
+// get sockaddr, IPv4 or IPv6:
+void *Socket::get_in_addr2(struct sockaddr *sa)
+{
+	if (sa->sa_family == AF_INET) {
+		return &(((struct sockaddr_in*)sa)->sin_addr);
+	}
+
+	return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+
+#endif
+
+
 Socket::Socket(const std::string& serverIP, const std::string& serverPort)
 {
 	printf("client: connecting...\n");
@@ -137,7 +151,14 @@ Socket::~Socket()
 
 bool Socket::isConnected()
 {
+#ifdef WIN32
 	return _socketFD != INVALID_SOCKET;
+#else
+	int error = 0;
+	socklen_t len = sizeof(error);
+	int sockopt = getsockopt(_socketFD, SOL_SOCKET, SO_ERROR, &error, &len);
+	return error == 0;
+#endif
 }
 
 void Socket::sendMessage(std::string  message)

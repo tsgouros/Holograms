@@ -2,7 +2,7 @@ PROJECT(Holograms)
 
 #SET BUILD-TYPE TO RELEASE IF NOT DEFINED
 if(NOT CMAKE_BUILD_TYPE)
-	set(CMAKE_BUILD_TYPE Release)
+	set(CMAKE_BUILD_TYPE Debug)
 endif(NOT CMAKE_BUILD_TYPE)
 set(ARCH "x86_64")
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/")
@@ -20,7 +20,11 @@ if(MSVC OR MSVC_IDE)
   message( "VC11: use Microsoft Visual Studio 2013 " 
       "with Microsoft Visual C++ Compiler Nov 2012 CTP (v120p_xp)" ) 
     set(CMAKE_GENERATOR_TOOLSET   "v120_xp" CACHE STRING "Platform Toolset" FORCE) 
-    set(CMAKE_VS_PLATFORM_TOOLSET  "v120_xp" CACHE STRING "Platform Toolset" FORCE) 
+    set(CMAKE_VS_PLATFORM_TOOLSET  "v120_xp" CACHE STRING "Platform Toolset" FORCE)
+else()
+  message("Set CC and CXX to point to correct gcc and g++ before first invocation of cmake")
+  message("FYI -- OpenCV 2.4.0 seems to depend on gcc < 5.0")
+
 endif()
 
 if(APPLE AND CMAKE_INSTALL_PREFIX MATCHES "/usr/local")
@@ -29,9 +33,6 @@ endif()
 
 set(CMAKE_C_FLAGS_RELEASE "-O3")
 
-if(CMAKE_COMPILER_IS_GNUCXX OR APPLE)
-       add_definitions( -Wno-deprecated-register)
-endif()
 
 message(STATUS "Building ${PROJECT_NAME} in ${CMAKE_BUILD_TYPE} mode")
 cmake_minimum_required(VERSION 2.8.8)
@@ -53,7 +54,7 @@ ENDIF(WIN32)
 #ADD_DEFINITIONS(${QT_DEFINITIONS})
 
 SET(CMAKE_CURRENT_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
-INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR} ${OPENCV_INCLUDE_DIRS})
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR} ${OpenCV_INCLUDE_DIRS})
 
 #SET GENERIC HEADER AND SOURCE FILES
 SET(HEADERS 
