@@ -4,6 +4,10 @@
 
 #define NOMINMAX
 
+#include <iostream>
+#include <fstream>
+#include "Socket.h"
+
 #ifdef _MSC_VER
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -18,10 +22,6 @@
 #include <sys/types.h>
 
 #endif
-
-#include <iostream>
-#include <fstream>
-#include "Socket.h"
 
 #include <chrono>
 #include <ctime>
@@ -459,7 +459,7 @@ void findContours(std::string outdir, cv::Mat image_maximum, cv::Mat image_maxim
 		Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
 		drawContours(drawing, contours, i, color, -1, 8, 0, 0, Point());
 		rectangle(drawing, bounds[i].tl(), bounds[i].br(), color, 2, 8, 0);
-		putText(drawing, std::to_string(static_cast<long long>(i)), bounds[i].br(),
+		putText(drawing, std::to_string(((long long)i)), bounds[i].br(),
 			FONT_HERSHEY_COMPLEX_SMALL, 2, color, 1, CV_AA);
 	}
 
@@ -506,7 +506,7 @@ void saveROI(std::string outdir, std::vector<cv::Rect> bounds, std::vector<int> 
 {	
 	for (size_t c = 0; c < bounds.size(); c++)
 	{
-	  std::cout << "Save Contour " << c << " at depth " << std::to_string(static_cast<long long>(depths_contour[c])) << std::endl;
+	  std::cout << "Save Contour " << c << " at depth " << std::to_string(((long long)depths_contour[c])) << std::endl;
 
 		float* data = new float[width * height];
 
@@ -517,7 +517,7 @@ void saveROI(std::string outdir, std::vector<cv::Rect> bounds, std::vector<int> 
 		}
 		else
 		{
-		  std::string name = "d:\\data//Amplitude_" + std::to_string(static_cast<long long>(depths_contour[c])) + ".ext";
+		  std::string name = "d:\\data//Amplitude_" + std::to_string(((long long)depths_contour[c])) + ".ext";
 			//std::string name = datafolder + "//Amplitude_" + std::to_string(depths_contour[c]) + ".ext";
 
 			FILE* file = fopen(name.c_str(), "rb");
@@ -547,9 +547,9 @@ void saveROI(std::string outdir, std::vector<cv::Rect> bounds, std::vector<int> 
 		image_display.convertTo(drawing, CV_8U);
 
 		if (mode == 1){
-		  imwrite(outdir + "//contours_" + std::to_string(static_cast<long long>(c)) + ".png", drawing);
+		  imwrite(outdir + "//contours_" + std::to_string(((long long)c)) + ".png", drawing);
 		} else if (mode == 2){
-		  imwrite(outdir + "//contoursPhase_" + std::to_string(static_cast<long long>(c)) + ".png", drawing);
+		  imwrite(outdir + "//contoursPhase_" + std::to_string(((long long)c)) + ".png", drawing);
 		}
 
 		if (show)
@@ -610,8 +610,8 @@ void writeReport(std::string outdir, std::vector<cv::Rect> bounds, std::vector<i
 		outfile << "<HEIGHT>" << bounds[c].height << "</HEIGHT>" << std::endl;
 		outfile << "<DEPTH>" << depths_contour[c] << "</DEPTH>" << std::endl;
 		outfile << "<VAL>" << vals_contour[c] << "</VAL>" << std::endl;
-		outfile << "<IMAGE>" << "contours_" + std::to_string(static_cast<long long>(c)) + ".png" << "</IMAGE>" << std::endl;
-		outfile << "<IMAGEPHASE>" << "contoursPhase_" + std::to_string(static_cast<long long>(c)) + ".png" << "</IMAGEPHASE>" << std::endl;
+		outfile << "<IMAGE>" << "contours_" + std::to_string(((long long)c)) + ".png" << "</IMAGE>" << std::endl;
+		outfile << "<IMAGEPHASE>" << "contoursPhase_" + std::to_string(((long long)c)) + ".png" << "</IMAGEPHASE>" << std::endl;
 		outfile << "</ROI>" << std::endl;
 	}
 	outfile << "</DATA>" << std::endl;
@@ -780,7 +780,7 @@ int main(int argc, char** argv)
 		{
 			Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
 			rectangle(drawing, bounds[i].tl(), bounds[i].br(), color, 2, 8, 0);
-			putText(drawing, std::to_string(static_cast<long long>(i)), bounds[i].br(),
+			putText(drawing, std::to_string(((long long)i)), bounds[i].br(),
 				FONT_HERSHEY_COMPLEX_SMALL, 2, color, 1, CV_AA);
 		}
 		

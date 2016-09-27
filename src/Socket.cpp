@@ -7,7 +7,7 @@
 
 #ifndef WIN32
 // get sockaddr, IPv4 or IPv6:
-void *Socket::get_in_addr2(struct sockaddr *sa)
+void *get_in_addr(struct sockaddr *sa)
 {
 	if (sa->sa_family == AF_INET) {
 		return &(((struct sockaddr_in*)sa)->sin_addr);
@@ -126,7 +126,7 @@ Socket::Socket(const std::string& serverIP, const std::string& serverPort)
 		exit(2);
 	}
 
-	inet_ntop(p->ai_family, get_in_addr2((struct sockaddr *)p->ai_addr), s, sizeof s);
+	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof s);
 	printf("client: connected to %s\n", s);
 
 	freeaddrinfo(servinfo); // all done with this structure
@@ -182,6 +182,7 @@ std::string Socket::receiveMessage()
 {
 	std::string output;
 	char buffer[1024];
+	std::cout << "receiving something" << std::endl;
 
 	int n;
 	while ((errno = 0, (n = recv(_socketFD, buffer, sizeof(buffer), 0))>0) ||
