@@ -59,7 +59,7 @@ std::string datafolder = "";
 std::string ip = "172.20.160.24";
 #endif
 
-std::string filename = "flowcam_akashiwo_july24-0g-4us_24-Jul-2015_15-03-43-719.bmp";
+std::string filename = "EN_581_cast_7__15-Jun-2016_01-07-15-590.bmp";
 
 std::string port = "1975";
 Socket *sock = NULL;
