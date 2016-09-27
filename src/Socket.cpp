@@ -133,6 +133,13 @@ Socket::Socket(const std::string& serverIP, const std::string& serverPort)
 
 	_socketFD = sockfd;
 
+	// Set a timeout.
+	struct timeval tv;
+	tv.tv_sec = 1;
+	tv.tv_usec = 300;
+	setsockopt(_socketFD, SOL_SOCKET, SO_RCVTIMEO, 
+		   (char *)&tv, sizeof(struct timeval)); 
+
 #endif
 
 	//set Api version
@@ -163,6 +170,8 @@ bool Socket::isConnected()
 
 void Socket::sendMessage(std::string  message)
 {
+  std::cout << "sending: " << message ;
+
 	const char * message_char = message.c_str();
 	int len = strlen(message_char);
 	int total = 0;        // how many bytes we've sent
@@ -176,6 +185,8 @@ void Socket::sendMessage(std::string  message)
 		total += n;
 		bytesleft -= n;
 	}
+
+	std::cout << "... done" << std::endl;
 }
 
 std::string Socket::receiveMessage()
@@ -184,8 +195,11 @@ std::string Socket::receiveMessage()
 	char buffer[1024];
 	std::cout << "receiving something" << std::endl;
 
+	long long comment = 1000000;
+
 	int n;
-	while ((errno = 0, (n = recv(_socketFD, buffer, sizeof(buffer), 0))>0) ||
+	errno = 0;
+	while (((n = recv(_socketFD, buffer, sizeof(buffer), 0))>0) ||
 		errno == EINTR)
 	{
 		if (n > 0){
@@ -194,6 +208,11 @@ std::string Socket::receiveMessage()
 		else
 		{
 			break;
+		}
+
+		if (output.size() > comment) { 
+		  std::cout << "output.size(): " << output.size() << std::endl;
+		  comment += 1000000;
 		}
 	}
 
@@ -310,49 +329,49 @@ void Socket::receiveImageData(int depth, float* data)
 
 void Socket::setOutputMode(int mode)
 {
-	//flush leftover
-	int count = 0;
-	while (count < MAX_FLUSH_CYCLE){
-		receiveMessage();
-		count++;
-	}
+	// //flush leftover
+	// int count = 0;
+	// while (count < MAX_FLUSH_CYCLE){
+	// 	receiveMessage();
+	// 	count++;
+	// }
 
 	//set to phase images
 	sendMessage("OUTPUT_MODE " + std::to_string(mode) + "\n0\n");
-	std::string reply;
-	while (reply.empty()){
-		reply = receiveMessage();
-	}
-	if (reply.size() < 100){
-		std::cout << reply << std::endl;
-	}
-	else
-	{
-		std::cout << "Discard old data " << reply.size() << std::endl;
-	}
+	// std::string reply;
+	// while (reply.empty()){
+	// 	reply = receiveMessage();
+	// }
+	// if (reply.size() < 100){
+	// 	std::cout << reply << std::endl;
+	// }
+	// else
+	// {
+	// 	std::cout << "Discard old data " << reply.size() << std::endl;
+	// }
 
-	//flush receive
-	count = 0;
-	while (count < MAX_FLUSH_CYCLE){
-		receiveMessage();
-		count++;
-	}
+	// //flush receive
+	// count = 0;
+	// while (count < MAX_FLUSH_CYCLE){
+	// 	receiveMessage();
+	// 	count++;
+	// }
 }
 
 void Socket::setImage(std::string filename)
 {
 	sendMessage("RECONSTRUCT_HOLOGRAMS " + filename + "\n0\n");
 
-	std::string reply;
-	while (reply.empty()){
-		reply = receiveMessage();
-	}
+	// std::string reply;
+	// while (reply.empty()){
+	// 	reply = receiveMessage();
+	// }
 
-	if (reply.size() < 100){
-		std::cout << reply << std::endl;
-	}
-	else
-	{
-		std::cout << "Discard old data " << reply.size() << std::endl;
-	}
+	// if (reply.size() < 100){
+	// 	std::cout << reply << std::endl;
+	// }
+	// else
+	// {
+	// 	std::cout << "Discard old data " << reply.size() << std::endl;
+	// }
 }

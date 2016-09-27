@@ -547,7 +547,7 @@ int main(int argc, char** argv)
 
 		//set Image
 		std::string hologram = datafolder + "/" + filename;
-		std::cout << "Loading " << hologram << std::endl;
+		std::cout << "Loading: " << hologram << std::endl;
 		sock->setImage(hologram);
 
 		if (online)
