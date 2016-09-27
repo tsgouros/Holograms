@@ -568,7 +568,11 @@ int main(int argc, char** argv)
 
 	if (show)
 	{
-		imshow("Loading", 0);
+
+	  cv::namedWindow("Loading", cv::WINDOW_NORMAL);
+	  cv::resizeWindow("Loading", 500, 400);
+
+	  imshow("Loading", 0);
 	}
 
 	////////Load Data

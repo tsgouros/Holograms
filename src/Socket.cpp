@@ -1,12 +1,12 @@
-
-
 #include "Socket.h"
 #include <iostream>
 
 #define MAX_FLUSH_CYCLE 10
+#define OCTOTERM "\n0\n"
 
 #ifndef WIN32
-// get sockaddr, IPv4 or IPv6:
+
+// Provides a socket address in the appropriate (IPv4 or IPv6) format.
 void *get_in_addr(struct sockaddr *sa)
 {
 	if (sa->sa_family == AF_INET) {
@@ -18,7 +18,7 @@ void *get_in_addr(struct sockaddr *sa)
 
 #endif
 
-
+// Create the socket, connected to the given IP and port.
 Socket::Socket(const std::string& serverIP, const std::string& serverPort)
 {
 	printf("client: connecting...\n");
@@ -98,7 +98,8 @@ Socket::Socket(const std::string& serverIP, const std::string& serverPort)
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 
-	if ((rv = getaddrinfo(serverIP.c_str(), serverPort.c_str(), &hints, &servinfo)) != 0) {
+	if ((rv = getaddrinfo(serverIP.c_str(), serverPort.c_str(), 
+			      &hints, &servinfo)) != 0) {
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
 		//return 1;
 		exit(1);
@@ -106,7 +107,8 @@ Socket::Socket(const std::string& serverIP, const std::string& serverPort)
 
 	// loop through all the results and connect to the first we can
 	for (p = servinfo; p != NULL; p = p->ai_next) {
-		if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+		if ((sockfd = socket(p->ai_family, p->ai_socktype, 
+				     p->ai_protocol)) == -1) {
 			perror("client: socket");
 			continue;
 		}
@@ -126,23 +128,26 @@ Socket::Socket(const std::string& serverIP, const std::string& serverPort)
 		exit(2);
 	}
 
-	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof s);
+	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), 
+		  s, sizeof s);
 	printf("client: connected to %s\n", s);
 
 	freeaddrinfo(servinfo); // all done with this structure
 
 	_socketFD = sockfd;
 
-	// Set a timeout.
+	// Set a timeout.  This was tuned by hand, no idea if optimal.
 	struct timeval tv;
-	tv.tv_sec = 1;
-	tv.tv_usec = 300;
+	tv.tv_sec = 0;
+	tv.tv_usec = 300000;
 	setsockopt(_socketFD, SOL_SOCKET, SO_RCVTIMEO, 
 		   (char *)&tv, sizeof(struct timeval)); 
 
 #endif
 
-	//set Api version
+	// Send the API version to the Octopus software.  This is supposed to 
+	// put the software into the special 'receive information through
+	// back door' mode, and should more or less disable the GUI.
 	sendMessage("SET_API_VERSION 2\n");
 }
 
@@ -170,7 +175,7 @@ bool Socket::isConnected()
 
 void Socket::sendMessage(std::string  message)
 {
-  std::cout << "sending: " << message ;
+  // std::cout << "sending: " << message ;
 
 	const char * message_char = message.c_str();
 	int len = strlen(message_char);
@@ -186,16 +191,13 @@ void Socket::sendMessage(std::string  message)
 		bytesleft -= n;
 	}
 
-	std::cout << "... done" << std::endl;
+  // std::cout << "... done" << std::endl;
 }
 
 std::string Socket::receiveMessage()
 {
 	std::string output;
 	char buffer[1024];
-	std::cout << "receiving something" << std::endl;
-
-	long long comment = 1000000;
 
 	int n;
 	errno = 0;
@@ -209,66 +211,9 @@ std::string Socket::receiveMessage()
 		{
 			break;
 		}
-
-		if (output.size() > comment) { 
-		  std::cout << "output.size(): " << output.size() << std::endl;
-		  comment += 1000000;
-		}
 	}
 
 	return output;
-}
-
-
-cv::Mat Socket::receiveImage()
-{
-	//receive data
-	std::string reply;
-	while (reply.empty()){
-		reply = receiveMessage();
-	}
-
-	//parse data
-	std::vector<std::string> strings;
-	std::string::size_type prev_pos = 0, pos = 0;
-
-	pos = reply.find('\n', pos);
-	strings.push_back(reply.substr(prev_pos, pos - prev_pos));
-	prev_pos = ++pos;
-
-	pos = reply.find('\n', pos);
-	strings.push_back(reply.substr(prev_pos, pos - prev_pos));
-	prev_pos = ++pos;
-
-	strings.push_back(reply.substr(prev_pos, reply.size() - prev_pos));
-
-	int width = atoi(strings[0].substr(22, 4).c_str());
-	int height = atoi(strings[0].substr(27, 4).c_str());
-	int datasize = atoi(strings[1].c_str());
-
-	//convert endianess
-	char* data = new char[datasize];
-	char* dataBigEndian = const_cast<char*> (strings[2].c_str());
-
-	int * ptr_org = (int*)dataBigEndian;
-	int * ptr_dest = (int*)data;
-
-	for (int i = 0; i < datasize / 4; i++, ptr_org++, ptr_dest++)
-	{
-		*ptr_dest = (*ptr_org << 24) |
-			((*ptr_org << 8) & 0x00ff0000) |
-			((*ptr_org >> 8) & 0x0000ff00) |
-			((*ptr_org >> 24) & 0x000000ff);
-	}
-
-	cv::Mat image(cv::Size(width, height), CV_32FC1, (float*)data); 
-	//we clone so that we can delete the data array
-	cv::Mat out_image = image.clone();
-
-	//delete data
-	delete[] data;
-
-	return out_image;
 }
 
 void Socket::receiveImageData(int depth, float* data)
@@ -276,7 +221,7 @@ void Socket::receiveImageData(int depth, float* data)
 	std::vector<std::string> strings;
 	int datasize;
 
-	std::string message = "STREAM_RECONSTRUCTION " + std::to_string(depth) + "\n0\n";
+	std::string message = "STREAM_RECONSTRUCTION " + std::to_string(depth) + OCTOTERM;
 	bool dataReady = false;
 	
 	sendMessage(message);
@@ -294,22 +239,60 @@ void Socket::receiveImageData(int depth, float* data)
 			reply += reply2;
 		}
 
-		//parse data
+		// Parse data.  The problem is that sometimes a reply
+		// has a "RECONSTRUCT_HOLOGRAMS 1\n0\n" prefixed to it.
+		// So the parsing is careful.
 		std::string::size_type prev_pos = 0, pos = 0;
 
+		while (reply.substr(pos, 6).compare("STREAM") != 0) {
+		  if (reply.size() < 300) {
+		    std::cout << "here's the reply we don't want:" << reply << "<<" << std::endl;
+		  }
+
+		  reply.clear();
+		  reply2.clear();
+		  while (reply2.empty()){
+		    reply2 = receiveMessage();
+		    reply += reply2;
+		  }
+		}
+
+		// This should pick up the "STREAM_RECONSTRUCTION..." line.
 		pos = reply.find('\n', pos);
 		strings.push_back(reply.substr(prev_pos, pos - prev_pos));
 		prev_pos = ++pos;
 
+		// This should get the N, which is usually 16777216.
 		pos = reply.find('\n', pos);
 		strings.push_back(reply.substr(prev_pos, pos - prev_pos));
 		prev_pos = ++pos;
 
 		strings.push_back(reply.substr(prev_pos, reply.size() - prev_pos));
 
-		int width = atoi(strings[0].substr(22, 4).c_str());
-		int height = atoi(strings[0].substr(27, 4).c_str());
+		// Parse the important values from the first line.
+		pos = 0;
+		prev_pos = 0;
+		std::vector<std::string> stringvals;
+		pos = strings[0].find(' ', pos);
+		while (pos != std::string::npos) {
+		  stringvals.push_back(strings[0].substr(prev_pos, pos-prev_pos));
+
+		  prev_pos = ++pos;
+		  pos = strings[0].find(' ', pos);
+		}
+
+		// Parse the various values from the header line.
+		int width = atoi(stringvals[1].c_str());
+		int height = atoi(stringvals[2].c_str());
+		std::string filename = stringvals[3];
+		int level = atoi(stringvals[3].c_str());
+		int reconType = atoi(strings[0].substr(prev_pos).c_str());
+
+		// Parse the N from the second line.
 		datasize = atoi(strings[1].c_str());
+
+		// Everything else received should be the data, so it should
+		// all be in strings[2].
 	}
 
 	//convert endianess
@@ -337,7 +320,7 @@ void Socket::setOutputMode(int mode)
 	// }
 
 	//set to phase images
-	sendMessage("OUTPUT_MODE " + std::to_string(mode) + "\n0\n");
+	sendMessage("OUTPUT_MODE " + std::to_string(mode) + OCTOTERM);
 	// std::string reply;
 	// while (reply.empty()){
 	// 	reply = receiveMessage();
@@ -360,7 +343,7 @@ void Socket::setOutputMode(int mode)
 
 void Socket::setImage(std::string filename)
 {
-	sendMessage("RECONSTRUCT_HOLOGRAMS " + filename + "\n0\n");
+	sendMessage("RECONSTRUCT_HOLOGRAMS " + filename + OCTOTERM);
 
 	// std::string reply;
 	// while (reply.empty()){
