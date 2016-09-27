@@ -38,6 +38,7 @@ bool doWriteImages = false;
 bool doGenerateDepthMaximum = false;
 bool doMergebounds = true;
 bool usePhase = true;
+bool useAbs = false;
 
 int maxAmplitude = 5.0;
 double minAll = std::numeric_limits<double>::max();
@@ -84,6 +85,149 @@ int getIdxDepth(std::vector<int> &depths, int depth)
 	return pos;
 }
 
+void writeImages(int start, int stop, int step_width)
+{
+
+	std::string outdir = outputfolder + "//" + filename;
+	CreateDirectory(outdir.c_str(), NULL);
+
+	sock = new Socket(ip, port);
+
+	//set Image
+	std::string hologram = datafolder + "/" + filename;
+	std::cout << "Loading " << hologram << std::endl;
+	sock->setImage(hologram);
+
+	if (usePhase){
+		sock->setOutputMode(2);
+	}
+	std::string name;
+	std::vector<double> min_vals, max_vals;
+	for (int d = start; d <= stop; d += step_width){
+		std::cerr << "Load phase " << d << std::endl;
+		float* data = new float[width * height];
+		sock->receiveImageData(d, data);
+
+		name = outdir + "//Phase_" + std::to_string(d) + ".ext";
+		FILE* file = fopen(name.c_str(), "wb");
+		fwrite(data, sizeof(float), width * height, file);
+		fclose(file);
+
+		cv::Mat image(cv::Size(width, height), CV_32FC1, data);
+
+		double Min, Max;
+		cv::minMaxLoc(image, &Min, &Max);
+		min_vals.push_back(Min);
+		max_vals.push_back(Max);
+
+		cv::Mat image_disp;
+		cv::Mat B;
+		normalize(image, image_disp, 0, 255, CV_MINMAX);
+		image_disp.convertTo(B, CV_8U);
+
+		imwrite(outdir + "//Phase_" + std::to_string(d) + ".png", B);
+
+		image.release();
+		delete[] data;
+	}
+
+	name = outdir + "//Phase_MinMax.csv";
+	std::ofstream ofs(name.c_str(), std::ofstream::out);
+	for (int i = 0; i < min_vals.size(); i++)
+	{
+		ofs << min_vals[i] << " , " << max_vals[i] << std::endl;
+
+	}
+	ofs.close();
+
+	if (usePhase){
+		sock->setOutputMode(1);
+	}
+
+	min_vals.clear();
+	max_vals.clear();
+
+	for (int d = start; d <= stop; d += step_width){
+		std::cerr << "Load amplitude " << d << std::endl;
+		float* data = new float[width * height];
+		sock->receiveImageData(d, data);
+
+		name = outdir + "//Amplitude_" + std::to_string(d) + ".ext";
+		FILE* file = fopen(name.c_str(), "wb");
+		fwrite(data, sizeof(float), width * height, file);
+		fclose(file);
+
+		cv::Mat image(cv::Size(width, height), CV_32FC1, data);
+
+		double Min, Max;
+		cv::minMaxLoc(image, &Min, &Max);
+		min_vals.push_back(Min);
+		max_vals.push_back(Max);
+
+		cv::Mat image_disp;
+		cv::Mat B;
+		normalize(image, image_disp, 0, 255, CV_MINMAX);
+		image_disp.convertTo(B, CV_8U);
+
+		imwrite(outdir + "//Amplitude_" + std::to_string(d) + ".png", B);
+
+		image.release();
+		delete[] data;
+	}
+
+	name = outdir + "//Amplitude_MinMax.csv";
+	std::ofstream ofs2(name.c_str(), std::ofstream::out);
+	for (int i = 0; i < min_vals.size(); i++)
+	{
+		ofs2 << min_vals[i] << " , " << max_vals[i] << std::endl;
+
+	}
+	ofs2.close();
+
+	if (usePhase){
+		sock->setOutputMode(1);
+	}
+
+	min_vals.clear();
+	max_vals.clear();
+	for (int d = start; d <= stop; d += step_width){
+		std::cerr << "Load Intensity " << d << std::endl;
+		float* data = new float[width * height];
+		sock->receiveImageData(d, data);
+
+		name = outdir + "//Intensity" + std::to_string(d) + ".ext";
+		FILE* file = fopen(name.c_str(), "wb");
+		fwrite(data, sizeof(float), width * height, file);
+		fclose(file);
+
+		cv::Mat image(cv::Size(width, height), CV_32FC1, data);
+
+		double Min, Max;
+		cv::minMaxLoc(image, &Min, &Max);
+		min_vals.push_back(Min);
+		max_vals.push_back(Max);
+
+		cv::Mat image_disp;
+		cv::Mat B;
+		normalize(image, image_disp, 0, 255, CV_MINMAX);
+		image_disp.convertTo(B, CV_8U);
+
+		imwrite(outdir + "//Intensity" + std::to_string(d) + ".png", B);
+
+		image.release();
+		delete[] data;
+	}
+
+	name = outdir + "//Intensity_MinMax.csv";
+	std::ofstream ofs3(name.c_str(), std::ofstream::out);
+	for (int i = 0; i < min_vals.size(); i++)
+	{
+		ofs3 << min_vals[i] << " , " << max_vals[i] << std::endl;
+
+	}
+	ofs3.close();
+}
+
 void loadImages(std::vector<cv::Mat> &phase_images,
 	std::vector<float *> &phase_images_data,
 	std::vector<int> &depths, int start, int stop, int step_width, bool skip_load = false)
@@ -98,24 +242,17 @@ void loadImages(std::vector<cv::Mat> &phase_images,
 			if (!skip_load && online)
 			{
 				sock->receiveImageData(d, data);
-
-				if (doWriteImages){
-					std::string name = datafolder + "//Phase_" + std::to_string(d) + ".ext";
-					FILE* file = fopen(name.c_str(), "wb");
-					fwrite(data, sizeof(float), width * height, file);
-					fclose(file);
-				}
 			}
 			else
 			{
-				//std::string name = datafolder + "//Phase_" + std::to_string(d) + ".ext";
-				std::string name = "data//EN_581_cast_7__15-Jun-2016_01-07-21-715//Phase_" + std::to_string(d) + ".ext";
+				std::string name = datafolder + "//Phase_" + std::to_string(d) + ".ext";
 				FILE* file = fopen(name.c_str(), "rb");
 				fread(data, sizeof(float), width * height, file);
 				fclose(file);
 			}
 
 			cv::Mat image(cv::Size(width, height), CV_32FC1, data);
+			if (useAbs) image = abs(image);
 
 			double Min, Max;
 			cv::minMaxLoc(image, &Min, &Max);
@@ -378,6 +515,8 @@ void saveROI(std::string outdir, std::vector<cv::Rect> bounds, std::vector<int> 
 		}
 
 		cv::Mat image(cv::Size(width, height), CV_32FC1, data);
+		if (mode == 2 && useAbs) image = abs(image);
+
 		cv::Rect bound_cont = bounds[c];
 		bound_cont.x = bound_cont.x - 20;
 		bound_cont.y = bound_cont.y - 20;
@@ -519,6 +658,12 @@ int main(int argc, char** argv)
 	if (argc > 1)
 	{
 		filename = std::string(argv[1]);
+	}
+
+	if (doWriteImages)
+	{
+		writeImages(min_depth, max_depth, step_size);
+		return 1;
 	}
 
 	std::string outdir = outputfolder + "//" + filename;
