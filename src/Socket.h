@@ -36,15 +36,18 @@ public:
 	bool isConnected();
 	void sendMessage(std::string);
 	std::string receiveMessage();
+	int receiveMessage(char *buf, int len);
 	cv::Mat receiveImage();
 	void receiveImageData(int depth, float* data);
-	void setOutputMode(int mode);
-	void setImage(std::string filename);
+	bool setOutputMode(int mode);
+	bool setImage(std::string folder, std::string filename);
 
 private:
 
 	SOCKET _socketFD;
-
+	char dummyBuffer[1024];
+	std::string filename;
+	int format;
 };
 
 

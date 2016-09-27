@@ -38,12 +38,12 @@ using namespace cv;
 //std::string filename = "testdata";
 
 bool doPreloaded = false;
-bool doRefine = true;
+bool doRefine = false;
 bool doWriteImages = false;
 bool doGenerateDepthMaximum = false;
 bool doMergebounds = true;
 bool usePhase = true;
-bool useAbs = false;
+bool useAbs = true;
 
 int maxAmplitude = 5.0;
 double minAll = std::numeric_limits<double>::max();
@@ -54,6 +54,7 @@ bool online = true;
 #ifdef WIN32
 std::string datafolder = "C:/holograms";
 std::string ip = "10.12.160.99";
+//std::string ip = "127.0.0.1";
 #else
 std::string datafolder = "";
 std::string ip = "172.20.160.24";
@@ -79,8 +80,8 @@ int height = 2048;
 int windowsize = 5;
 
 //contours
-float max_threshold = 0.45;
-double contour_minArea = 15.0;
+float max_threshold = 0.35;
+double contour_minArea = 10.0;
 
 float merge_threshold_depth = 400;
 float merge_threshold_dist = 50;
@@ -104,12 +105,11 @@ void writeImages(int start, int stop, int step_width)
 	sock = new Socket(ip, port);
 
 	//set Image
-	std::string hologram = datafolder + "/" + filename;
-	std::cout << "Loading " << hologram << std::endl;
-	sock->setImage(hologram);
+	std::cout << "Loading " << datafolder + "/" + filename << std::endl;
+	if(!sock->setImage(datafolder + "/", filename))exit;
 
 	if (usePhase){
-		sock->setOutputMode(2);
+		if(!sock->setOutputMode(2))exit;
 	}
 	std::string name;
 	std::vector<double> min_vals, max_vals;
@@ -151,7 +151,7 @@ void writeImages(int start, int stop, int step_width)
 	ofs.close();
 
 	if (usePhase){
-		sock->setOutputMode(1);
+		if (!sock->setOutputMode(1))exit;
 	}
 
 	min_vals.clear();
@@ -195,7 +195,7 @@ void writeImages(int start, int stop, int step_width)
 	ofs2.close();
 
 	if (usePhase){
-		sock->setOutputMode(1);
+		if (!sock->setOutputMode(1))exit;
 	}
 
 	min_vals.clear();
@@ -263,7 +263,7 @@ void loadImages(std::vector<cv::Mat> &phase_images,
 			}
 
 			cv::Mat image(cv::Size(width, height), CV_32FC1, data);
-			if (useAbs) image = abs(image);
+			if (useAbs) image = cv::abs(image);
 
 			double Min, Max;
 			cv::minMaxLoc(image, &Min, &Max);
@@ -692,18 +692,17 @@ int main(int argc, char** argv)
 		sock = new Socket(ip, port);
 
 		//set Image
-		std::string hologram = datafolder + "/" + filename;
-		std::cout << "Loading " << hologram << std::endl;
-		sock->setImage(hologram);
+		std::cout << "Loading " << datafolder + "/" + filename << std::endl;
+		if(!sock->setImage(datafolder + "/",filename))exit;
 
 		if (online)
 		{
 			if (usePhase){
-				sock->setOutputMode(2);
+				if (!sock->setOutputMode(2))exit;
 			} 
 			else
 			{
-				sock->setOutputMode(1);
+				if (!sock->setOutputMode(1))exit;
 			}
 		}
 	}
@@ -809,14 +808,14 @@ int main(int argc, char** argv)
 	if (online)
 	{
 		if (!usePhase){
-			sock->setOutputMode(2);
+			if (!sock->setOutputMode(2))exit;
 		}
 	}
 	saveROI(outdir, bounds, depths_contour,2);
 
 	if (online)
 	{
-		sock->setOutputMode(1);
+		if (!sock->setOutputMode(1))exit;
 	}
 	saveROI(outdir, bounds, depths_contour,1);
 
