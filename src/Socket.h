@@ -40,7 +40,6 @@ public:
 	void receiveImageData(int depth, float* data);
 	void setOutputMode(int mode);
 	void setImage(std::string filename);
-	void *get_in_addr2(struct sockaddr *sa);
 
 private:
 
