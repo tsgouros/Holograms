@@ -37,6 +37,38 @@ using namespace cv;
 //std::string datafolder = "data";
 //std::string filename = "testdata";
 
+//#define ONLINE_WINDOWS
+//#define ONLINE_LINUX
+#define SAVING
+//#define PROCESSING_OFFLINE_WINDOWS
+
+std::string filename = "flowcam_akashiwo_july24-0g-4us_24-Jul-2015_15-04-13-411.bmp";
+
+#ifdef ONLINE_WINDOWS
+bool doPreloaded = false;
+bool doRefine = true;
+bool doWriteImages = false;
+bool doGenerateDepthMaximum = false;
+bool doMergebounds = true;
+bool usePhase = true;
+bool useAbs = true;
+bool online = true;
+std::string datafolder = "C:/Holograms";
+std::string ip = "10.12.160.99";
+std::string outputfolder = "data_out";
+#elif defined(SAVING)   
+bool doPreloaded = false;
+bool doRefine = false;
+bool doWriteImages = true;
+bool doGenerateDepthMaximum = false;
+bool doMergebounds = true;
+bool usePhase = true;
+bool useAbs = true;
+bool online = true;
+std::string datafolder = "C:/Holograms";
+std::string ip = "10.12.160.99";
+std::string outputfolder = "H:/offline_holograms";
+#elif defined(PROCESSING_OFFLINE_WINDOWS)   
 bool doPreloaded = false;
 bool doRefine = false;
 bool doWriteImages = false;
@@ -44,29 +76,30 @@ bool doGenerateDepthMaximum = false;
 bool doMergebounds = true;
 bool usePhase = true;
 bool useAbs = true;
+bool online = false;
+std::string datafolder = "D:/offline_holograms";
+std::string ip = "10.12.160.99";
+std::string outputfolder = "data_out";
+#elif defined(ONLINE_LINUX)  
+bool doPreloaded = false;
+bool doRefine = false;
+bool doWriteImages = false;
+bool doGenerateDepthMaximum = false;
+bool doMergebounds = true;
+bool usePhase = true;
+bool useAbs = true;
+bool online = false;
+std::string datafolder = "";
+std::string ip = "172.20.160.24";
+std::string outputfolder = "data_out";
+#endif
 
 int maxAmplitude = 5.0;
 double minAll = std::numeric_limits<double>::max();
 double maxAll = std::numeric_limits<double>::min();
 
-//remote
-bool online = true;
-#ifdef WIN32
-std::string datafolder = "C:/holograms";
-std::string ip = "10.12.160.99";
-//std::string ip = "127.0.0.1";
-#else
-std::string datafolder = "";
-std::string ip = "172.20.160.24";
-#endif
-
-std::string filename = "EN_581_cast_7__15-Jun-2016_01-07-15-590.bmp";
-
 std::string port = "1975";
 Socket *sock = NULL;
-
-//output
-std::string outputfolder = "data_out";
 
 //general settings
 bool show = true;
@@ -85,6 +118,8 @@ double contour_minArea = 10.0;
 
 float merge_threshold_depth = 400;
 float merge_threshold_dist = 50;
+
+int mode = 0;
 
 int getIdxDepth(std::vector<int> &depths, int depth)
 {
@@ -108,13 +143,13 @@ void writeImages(int start, int stop, int step_width)
 	std::cout << "Loading " << datafolder + "/" + filename << std::endl;
 	if(!sock->setImage(datafolder + "/", filename))exit;
 
-	if (usePhase){
-		if(!sock->setOutputMode(2))exit;
-	}
+
+	if(!sock->setOutputMode(2))exit;
+
 	std::string name;
 	std::vector<double> min_vals, max_vals;
 	for (int d = start; d <= stop; d += step_width){
-		std::cerr << "Load phase " << d << std::endl;
+		std::cerr << "Save phase " << d << std::endl;
 		float* data = new float[width * height];
 		sock->receiveImageData(d, data);
 
@@ -150,15 +185,15 @@ void writeImages(int start, int stop, int step_width)
 	}
 	ofs.close();
 
-	if (usePhase){
-		if (!sock->setOutputMode(1))exit;
-	}
+	
+	if (!sock->setOutputMode(1))exit;
+	
 
 	min_vals.clear();
 	max_vals.clear();
 
 	for (int d = start; d <= stop; d += step_width){
-		std::cerr << "Load amplitude " << d << std::endl;
+		std::cerr << "Save amplitude " << d << std::endl;
 		float* data = new float[width * height];
 		sock->receiveImageData(d, data);
 
@@ -194,18 +229,17 @@ void writeImages(int start, int stop, int step_width)
 	}
 	ofs2.close();
 
-	if (usePhase){
-		if (!sock->setOutputMode(1))exit;
-	}
+	
+	if (!sock->setOutputMode(0))exit;
 
 	min_vals.clear();
 	max_vals.clear();
 	for (int d = start; d <= stop; d += step_width){
-		std::cerr << "Load Intensity " << d << std::endl;
+		std::cerr << "Save Intensity " << d << std::endl;
 		float* data = new float[width * height];
 		sock->receiveImageData(d, data);
 
-		name = outdir + "//Intensity" + std::to_string(d) + ".ext";
+		name = outdir + "//Intensity_" + std::to_string(d) + ".ext";
 		FILE* file = fopen(name.c_str(), "wb");
 		fwrite(data, sizeof(float), width * height, file);
 		fclose(file);
@@ -222,7 +256,7 @@ void writeImages(int start, int stop, int step_width)
 		normalize(image, image_disp, 0, 255, CV_MINMAX);
 		image_disp.convertTo(B, CV_8U);
 
-		imwrite(outdir + "//Intensity" + std::to_string(d) + ".png", B);
+		imwrite(outdir + "//Intensity_" + std::to_string(d) + ".png", B);
 
 		image.release();
 		delete[] data;
@@ -256,7 +290,19 @@ void loadImages(std::vector<cv::Mat> &phase_images,
 			}
 			else
 			{
-				std::string name = datafolder + "//Phase_" + std::to_string(d) + ".ext";
+				std::string name;
+				if (mode == 2){
+					name = datafolder + "//" + filename + "//Phase_" + std::to_string(d) + ".ext";
+				} 
+				else if (mode == 1)
+				{
+					name = datafolder + "//" + filename + "//Amplitude_" + std::to_string(d) + ".ext";
+				} 
+				else
+				{
+					name = datafolder + "//" + filename + "//Intensity_" + std::to_string(d) + ".ext";
+				}
+				std::cerr << "Load "  << name << std::endl;
 				FILE* file = fopen(name.c_str(), "rb");
 				fread(data, sizeof(float), width * height, file);
 				fclose(file);
@@ -517,8 +563,29 @@ void saveROI(std::string outdir, std::vector<cv::Rect> bounds, std::vector<int> 
 		}
 		else
 		{
-		  std::string name = "d:\\data//Amplitude_" + std::to_string(((long long)depths_contour[c])) + ".ext";
-			//std::string name = datafolder + "//Amplitude_" + std::to_string(depths_contour[c]) + ".ext";
+			int d = depths_contour[c];
+			if (!online)
+			{
+				std::cerr << "Round " << d;
+				double tmp = d;
+				tmp = tmp / step_size;
+				d = round(tmp) * step_size;
+				std::cerr << " to " << d << std::endl;
+			}
+			
+			std::string name;
+			if (mode == 2){
+				name = datafolder + "//" + filename + "//Phase_" + std::to_string(((long long)d)) + ".ext";
+			}
+			else if (mode == 1)
+			{
+				name = datafolder + "//" + filename + "//Amplitude_" + std::to_string(((long long)d)) + ".ext";
+			}
+			else
+			{
+				name = datafolder + "//" + filename + "//Intensity_" + std::to_string(((long long)d)) + ".ext";
+			}
+			std::cerr << "Load " << name << std::endl;
 
 			FILE* file = fopen(name.c_str(), "rb");
 			fread(data, sizeof(float), width * height, file);
@@ -695,15 +762,22 @@ int main(int argc, char** argv)
 		std::cout << "Loading " << datafolder + "/" + filename << std::endl;
 		if(!sock->setImage(datafolder + "/",filename))exit;
 
+	}
+
+	if (usePhase){
+		mode = 2;
 		if (online)
 		{
-			if (usePhase){
-				if (!sock->setOutputMode(2))exit;
-			} 
-			else
-			{
-				if (!sock->setOutputMode(1))exit;
-			}
+			if (!sock->setOutputMode(mode))exit;
+		}
+
+	}
+	else
+	{
+		mode = 1;
+		if (online)
+		{
+			if (!sock->setOutputMode(mode))exit;
 		}
 	}
 
@@ -805,17 +879,19 @@ int main(int argc, char** argv)
 		}
 	}
 ////////Save ROIs
-	if (online)
-	{
-		if (!usePhase){
-			if (!sock->setOutputMode(2))exit;
+	if (!usePhase){
+		mode = 2;
+		if (online)
+		{	
+			if (!sock->setOutputMode(mode))exit;
 		}
 	}
 	saveROI(outdir, bounds, depths_contour,2);
 
+	mode = 1;
 	if (online)
 	{
-		if (!sock->setOutputMode(1))exit;
+		if (!sock->setOutputMode(mode))exit;
 	}
 	saveROI(outdir, bounds, depths_contour,1);
 
