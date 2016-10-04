@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<?xml-stylesheet type="text/xsl" href="#stylesheet"?>
+<!DOCTYPE doc [
+<!ATTLIST xsl:stylesheet
+id ID #REQUIRED>
+]>
+<doc>
+<!--Start XSL-->
+	<xsl:stylesheet  id="stylesheet" version="1.0" 
+	xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+
+	<xsl:template match="/doc">
+	  <html>
+	  <body>
+    <h2>
+      <xsl:value-of select="DATA/FILENAME"/>
+    </h2>
+    <h2>
+        Processing time : <xsl:value-of select="DATA/TIME"/> minutes
+    </h2>
+    <img height="1024" width="1024">
+      <xsl:attribute name="src">
+        <xsl:value-of select="DATA/CONTOURIMAGE"/>
+      </xsl:attribute>
+    </img>
+      <img height="1024" width="1024">
+        <xsl:attribute name="src">
+          <xsl:value-of select="DATA/MAXIMAGE"/>
+        </xsl:attribute>
+      </img>
+	  <table border="1">
+		<tr bgcolor="#9acd32">
+      <th>Contour</th>
+		  <th>X</th>
+		  <th>Y</th>
+		  <th>Width</th>
+		  <th>Height</th>
+		  <th>Depth</th>
+		  <th>Image</th>
+      <th>Phase</th>
+		</tr>
+		<xsl:for-each select="DATA/ROI">
+		<tr>
+      <td><xsl:value-of select="CONTOUR"/></td>
+		  <td><xsl:value-of select="X"/></td>
+		  <td><xsl:value-of select="Y"/></td>
+		  <td><xsl:value-of select="WIDTH"/></td>
+		  <td><xsl:value-of select="HEIGHT"/></td>
+		  <td><xsl:value-of select="DEPTH"/></td>
+		  <td>
+			<img>
+				<xsl:attribute name="src">
+					<xsl:value-of select="IMAGE"/>
+				</xsl:attribute>
+			</img>
+		  </td>
+      <td>
+        <img>
+          <xsl:attribute name="src">
+            <xsl:value-of select="IMAGEPHASE"/>
+          </xsl:attribute>
+        </img>
+      </td>
+		</tr>
+		</xsl:for-each>
+	  </table>
+	  </body>
+	  </html>
+	</xsl:template>
+	</xsl:stylesheet>
+ <!--Start XML-->

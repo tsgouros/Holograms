@@ -1,8 +1,15 @@
 #include "Socket.h"
 #include <iostream>
 
+
+#ifdef _MSC_VER
+#include <windows.h>
+#endif
+
 #define MAX_FLUSH_CYCLE 10
 #define OCTOTERM "\n0\n"
+
+bool DEBUG = false;
 
 #ifndef WIN32
 
@@ -70,7 +77,7 @@ Socket::Socket(const std::string& serverIP, const std::string& serverPort)
 	}
 
 	printf("client: connected\n");
-	int iTimeout = 300;
+	int iTimeout = 3000;
 	int out = setsockopt(sockfd,
 		SOL_SOCKET,
 		SO_RCVTIMEO,
@@ -145,10 +152,15 @@ Socket::Socket(const std::string& serverIP, const std::string& serverPort)
 
 #endif
 
+
 	// Send the API version to the Octopus software.  This is supposed to 
 	// put the software into the special 'receive information through
 	// back door' mode, and should more or less disable the GUI.
+
 	sendMessage("SET_API_VERSION 2\n");
+
+	//clear pipe;
+	receiveMessage();
 }
 
 Socket::~Socket()
@@ -216,86 +228,51 @@ std::string Socket::receiveMessage()
 	return output;
 }
 
-void Socket::receiveImageData(int depth, float* data)
+int Socket::receiveMessage(char *buf, int len) {
+	int total = 0;        // how many bytes we've received
+	int bytesleft = len; // how many we have left to receive
+	int n = 0;
+	while (total < len) {
+#ifdef WIN32
+		n = recv(_socketFD, (char *)(buf + total), bytesleft, 0);
+#else
+		n = recv(_socketFD, buf + total, bytesleft, 0);
+#endif
+		//if (n == -1) { break; }
+		total += n;
+		bytesleft -= n;
+	}
+	return n == -1 ? -1 : total; // return -1 on failure, total on success
+}
+
+cv::Mat Socket::receiveImage()
 {
-	std::vector<std::string> strings;
-	int datasize;
-
-	std::string message = "STREAM_RECONSTRUCTION " + std::to_string(depth) + OCTOTERM;
-	bool dataReady = false;
-	
-	sendMessage(message);
-
 	//receive data
 	std::string reply;
-		
-	while (strings.size() <=2 || datasize > strings[2].size())
-	{
-		strings.clear();
-		std::string reply2;
-			
-		while (reply2.empty()){
-			reply2 = receiveMessage();
-			reply += reply2;
-		}
-
-		// Parse data.  The problem is that sometimes a reply
-		// has a "RECONSTRUCT_HOLOGRAMS 1\n0\n" prefixed to it.
-		// So the parsing is careful.
-		std::string::size_type prev_pos = 0, pos = 0;
-
-		while (reply.substr(pos, 6).compare("STREAM") != 0) {
-		  if (reply.size() < 300) {
-		    std::cout << "here's the reply we don't want:" << reply << "<<" << std::endl;
-		  }
-
-		  reply.clear();
-		  reply2.clear();
-		  while (reply2.empty()){
-		    reply2 = receiveMessage();
-		    reply += reply2;
-		  }
-		}
-
-		// This should pick up the "STREAM_RECONSTRUCTION..." line.
-		pos = reply.find('\n', pos);
-		strings.push_back(reply.substr(prev_pos, pos - prev_pos));
-		prev_pos = ++pos;
-
-		// This should get the N, which is usually 16777216.
-		pos = reply.find('\n', pos);
-		strings.push_back(reply.substr(prev_pos, pos - prev_pos));
-		prev_pos = ++pos;
-
-		strings.push_back(reply.substr(prev_pos, reply.size() - prev_pos));
-
-		// Parse the important values from the first line.
-		pos = 0;
-		prev_pos = 0;
-		std::vector<std::string> stringvals;
-		pos = strings[0].find(' ', pos);
-		while (pos != std::string::npos) {
-		  stringvals.push_back(strings[0].substr(prev_pos, pos-prev_pos));
-
-		  prev_pos = ++pos;
-		  pos = strings[0].find(' ', pos);
-		}
-
-		// Parse the various values from the header line.
-		int width = atoi(stringvals[1].c_str());
-		int height = atoi(stringvals[2].c_str());
-		std::string filename = stringvals[3];
-		int level = atoi(stringvals[3].c_str());
-		int reconType = atoi(strings[0].substr(prev_pos).c_str());
-
-		// Parse the N from the second line.
-		datasize = atoi(strings[1].c_str());
-
-		// Everything else received should be the data, so it should
-		// all be in strings[2].
+	while (reply.empty()){
+		reply = receiveMessage();
 	}
 
+	//parse data
+	std::vector<std::string> strings;
+	std::string::size_type prev_pos = 0, pos = 0;
+
+	pos = reply.find('\n', pos);
+	strings.push_back(reply.substr(prev_pos, pos - prev_pos));
+	prev_pos = ++pos;
+
+	pos = reply.find('\n', pos);
+	strings.push_back(reply.substr(prev_pos, pos - prev_pos));
+	prev_pos = ++pos;
+
+	strings.push_back(reply.substr(prev_pos, reply.size() - prev_pos));
+
+	int width = atoi(strings[0].substr(22, 4).c_str());
+	int height = atoi(strings[0].substr(27, 4).c_str());
+	int datasize = atoi(strings[1].c_str());
+
 	//convert endianess
+	char* data = new char[datasize];
 	char* dataBigEndian = const_cast<char*> (strings[2].c_str());
 
 	int * ptr_org = (int*)dataBigEndian;
@@ -308,53 +285,87 @@ void Socket::receiveImageData(int depth, float* data)
 			((*ptr_org >> 8) & 0x0000ff00) |
 			((*ptr_org >> 24) & 0x000000ff);
 	}
+
+	cv::Mat image(cv::Size(width, height), CV_32FC1, (float*)data); 
+	//we clone so that we can delete the data array
+	cv::Mat out_image = image.clone();
+
+	//delete data
+	delete[] data;
+
+	return out_image;
 }
 
-void Socket::setOutputMode(int mode)
+void Socket::receiveImageData(int depth, float* data)
 {
-	// //flush leftover
-	// int count = 0;
-	// while (count < MAX_FLUSH_CYCLE){
-	// 	receiveMessage();
-	// 	count++;
-	// }
+	int datasize = 4 * 2048 * 2048;
 
-	//set to phase images
-	sendMessage("OUTPUT_MODE " + std::to_string(mode) + OCTOTERM);
-	// std::string reply;
-	// while (reply.empty()){
-	// 	reply = receiveMessage();
-	// }
-	// if (reply.size() < 100){
-	// 	std::cout << reply << std::endl;
-	// }
-	// else
-	// {
-	// 	std::cout << "Discard old data " << reply.size() << std::endl;
-	// }
+	std::string message = "STREAM_RECONSTRUCTION " + std::to_string(depth) + "\n0\n";
+	if (DEBUG) std::cout << "Send" << message << std::endl;
+	sendMessage(message);
 
-	// //flush receive
-	// count = 0;
-	// while (count < MAX_FLUSH_CYCLE){
-	// 	receiveMessage();
-	// 	count++;
-	// }
+	//receive data
+	std::string expectedReply = "STREAM_RECONSTRUCTION 2048 2048 " + filename + "  " + std::to_string(depth) + " " + std::to_string(format) + "\n" + std::to_string(datasize) + "\n";
+	
+	Sleep(500);
+	receiveMessage(dummyBuffer, expectedReply.size());
+	if (DEBUG) std::cout << "dummyBuffer:" << dummyBuffer << std::endl;
+	std::string reply = std::string(dummyBuffer, expectedReply.size());
+	if (reply != expectedReply) {
+	  if (DEBUG) std::cout << "REPLY:" << reply << ":vs XPCT:" << expectedReply << std::endl;
+	  assert(reply == expectedReply);
+	}
+	if (DEBUG) std::cout << "Receive " << reply << std::endl;
+
+	char * dataPtr = (char *) &data[0];
+	datasize = receiveMessage(dataPtr, datasize);
+
+	int * ptr_org = (int*) &data[0];
+	int * ptr_dest = (int*) &data[0];
+
+	for (int i = 0; i < datasize / 4; i++, ptr_org++, ptr_dest++)
+	{
+		*ptr_dest = (*ptr_org << 24) |
+			((*ptr_org << 8) & 0x00ff0000) |
+			((*ptr_org >> 8) & 0x0000ff00) |
+			((*ptr_org >> 24) & 0x000000ff);
+	}
 }
 
-void Socket::setImage(std::string filename)
+bool Socket::setOutputMode(int mode)
 {
-	sendMessage("RECONSTRUCT_HOLOGRAMS " + filename + OCTOTERM);
+	format = mode;
+	std::string message = "OUTPUT_MODE " + std::to_string(mode) + "\n0\n";
+	sendMessage(message);
 
-	// std::string reply;
-	// while (reply.empty()){
-	// 	reply = receiveMessage();
-	// }
+	receiveMessage(&dummyBuffer[0], message.size());
 
-	// if (reply.size() < 100){
-	// 	std::cout << reply << std::endl;
-	// }
-	// else
-	// {
-	// 	std::cout << "Discard old data " << reply.size() << std::endl;
-	// }
+	std::string reply = std::string(dummyBuffer, message.size());
+
+	if (DEBUG) std::cout << reply << std::endl;
+	assert(reply == message);
+	if (reply != message) return false;
+	Sleep(500);
+
+	return true;
+}
+
+bool Socket::setImage(std::string folder, std::string _filename)
+{
+  	filename = _filename;
+	sendMessage("RECONSTRUCT_HOLOGRAMS " + folder + filename + "\n0\n");
+
+	Sleep(10);
+	receiveMessage(&dummyBuffer[0], 26);
+
+	std::string reply = std::string(dummyBuffer,26);
+	if (reply != "RECONSTRUCT_HOLOGRAMS 1\n0\n") {
+	  if (DEBUG) std::cout << "REPLY:" << reply << ":vs XPCT:" << "RECONSTRUCT_HOLOGRAMS 1\n0\n" << std::endl;
+	  assert(reply == "RECONSTRUCT_HOLOGRAMS 1\n0\n");
+	}
+
+	if (reply != "RECONSTRUCT_HOLOGRAMS 1\n0\n") return false;
+
+	if (DEBUG) std::cout << reply << std::endl;
+	return true;
 }
