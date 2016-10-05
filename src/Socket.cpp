@@ -312,7 +312,7 @@ void Socket::receiveImageData(int depth, float* data)
 	if (DEBUG) std::cout << "dummyBuffer:" << dummyBuffer << std::endl;
 	std::string reply = std::string(dummyBuffer, expectedReply.size());
 	if (reply != expectedReply) {
-	  if (DEBUG) std::cout << "REPLY:" << reply << ":vs XPCT:" << expectedReply << std::endl;
+	  std::cout << "REPLY:" << reply << ":vs XPCT:" << expectedReply << std::endl;
 	  assert(reply == expectedReply);
 	}
 	if (DEBUG) std::cout << "Receive " << reply << std::endl;
@@ -360,7 +360,7 @@ bool Socket::setImage(std::string folder, std::string _filename)
 
 	std::string reply = std::string(dummyBuffer,26);
 	if (reply != "RECONSTRUCT_HOLOGRAMS 1\n0\n") {
-	  if (DEBUG) std::cout << "REPLY:" << reply << ":vs XPCT:" << "RECONSTRUCT_HOLOGRAMS 1\n0\n" << std::endl;
+	  std::cout << "REPLY:" << reply << ", expect:" << "RECONSTRUCT_HOLOGRAMS 1\n0\n" << std::endl;
 	  assert(reply == "RECONSTRUCT_HOLOGRAMS 1\n0\n");
 	}
 

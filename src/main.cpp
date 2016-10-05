@@ -56,6 +56,7 @@ bool online = true;
 std::string datafolder = "C:/Holograms";
 std::string ip = "10.12.160.99";
 std::string outputFolder = "data_out";
+std::string templateFolder = "";
 #elif defined(SAVING)   
 bool doPreloaded = false;
 bool doRefine = false;
@@ -68,6 +69,7 @@ bool online = true;
 std::string datafolder = "C:/Holograms";
 std::string ip = "10.12.160.99";
 std::string outputFolder = "H:/offline_holograms";
+std::string templateFolder = "";
 #elif defined(PROCESSING_OFFLINE_WINDOWS)   
 bool doPreloaded = false;
 bool doRefine = false;
@@ -79,11 +81,12 @@ bool useAbs = true;
 bool online = false;
 std::string datafolder = "D:/offline_holograms";
 std::string ip = "10.12.160.99";
+std::string templateFolder = "";
 std::string outputFolder = "data_out";
 #elif defined(ONLINE_LINUX)  
 bool doPreloaded = false;
 bool doRefine = true;
-bool doWriteImages = true;
+bool doWriteImages = false;
 bool doGenerateDepthMaximum = false;
 bool doMergebounds = true;
 bool usePhase = true;
@@ -95,6 +98,7 @@ bool online = true;
 std::string datafolder = "Z:/data/holoyurt-data/Holograms";
 std::string ip = "172.20.160.24";
 std::string outputFolder = "data_out";
+std::string templateFolder = "..";
 std::string slash = "/";
 #endif
 
@@ -107,7 +111,7 @@ Socket *sock = NULL;
 
 //general settings
 bool show = true;
-int step_size = 1000;
+int step_size = 100;
 int min_depth = 1000;
 int max_depth = 25000;
 int width = 2048;
@@ -647,7 +651,10 @@ void writeReport(std::string outdir, std::vector<cv::Rect> bounds, std::vector<i
 {
 
 	std::ifstream infile;
-	infile.open("template.xml", std::ifstream::in);
+	std::string templateFile = "template.xml";
+	if (!templateFolder.empty()) templateFile = templateFolder + slash + templateFile;
+
+	infile.open(templateFile, std::ifstream::in);
 
 	char * buffer;
 	long size;
@@ -655,7 +662,7 @@ void writeReport(std::string outdir, std::vector<cv::Rect> bounds, std::vector<i
 	// get size of file
 	infile.seekg(0);
 	std::streampos fsize = 0;
-	infile.seekg(0, std::ios::end);
+	infile.seekg(0, infile.end);
 	size = infile.tellg() - fsize;
 	infile.seekg(0);
 
