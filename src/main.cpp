@@ -38,11 +38,11 @@ using namespace cv;
 //std::string filename = "testdata";
 
 //#define ONLINE_WINDOWS
-//#define ONLINE_LINUX
-#define SAVING
+#define ONLINE_LINUX
+//#define SAVING
 //#define PROCESSING_OFFLINE_WINDOWS
 
-std::string filename = "flowcam_akashiwo_july24-0g-4us_24-Jul-2015_15-04-13-411.bmp";
+std::string filename = "EN_581_cast_7__15-Jun-2016_01-07-15-590.bmp";
 
 #ifdef ONLINE_WINDOWS
 bool doPreloaded = false;
@@ -55,7 +55,8 @@ bool useAbs = true;
 bool online = true;
 std::string datafolder = "C:/Holograms";
 std::string ip = "10.12.160.99";
-std::string outputfolder = "data_out";
+std::string outputFolder = "data_out";
+std::string templateFolder = "";
 #elif defined(SAVING)   
 bool doPreloaded = false;
 bool doRefine = false;
@@ -67,7 +68,8 @@ bool useAbs = true;
 bool online = true;
 std::string datafolder = "C:/Holograms";
 std::string ip = "10.12.160.99";
-std::string outputfolder = "H:/offline_holograms";
+std::string outputFolder = "H:/offline_holograms";
+std::string templateFolder = "";
 #elif defined(PROCESSING_OFFLINE_WINDOWS)   
 bool doPreloaded = false;
 bool doRefine = false;
@@ -79,19 +81,25 @@ bool useAbs = true;
 bool online = false;
 std::string datafolder = "D:/offline_holograms";
 std::string ip = "10.12.160.99";
-std::string outputfolder = "data_out";
+std::string templateFolder = "";
+std::string outputFolder = "data_out";
 #elif defined(ONLINE_LINUX)  
 bool doPreloaded = false;
-bool doRefine = false;
+bool doRefine = true;
 bool doWriteImages = false;
 bool doGenerateDepthMaximum = false;
 bool doMergebounds = true;
 bool usePhase = true;
 bool useAbs = true;
-bool online = false;
-std::string datafolder = "";
+bool online = true;
+// This is the source folder for the hologram data, as it appears from the
+// Windows machine.  It is, however, on gpfs, 
+// at /users/cavedemo/data/holoyurt-data...
+std::string datafolder = "Z:/data/holoyurt-data/Holograms";
 std::string ip = "172.20.160.24";
-std::string outputfolder = "data_out";
+std::string outputFolder = "data_out";
+std::string templateFolder = "..";
+std::string slash = "/";
 #endif
 
 int maxAmplitude = 5.0;
@@ -134,8 +142,12 @@ int getIdxDepth(std::vector<int> &depths, int depth)
 void writeImages(int start, int stop, int step_width)
 {
 
-	std::string outdir = outputfolder + "//" + filename;
-	CreateDirectory(outdir.c_str(), NULL);
+	std::string outFile = outputFolder + slash + filename;
+#ifdef _MSC_VER
+	CreateDirectory(outFile.c_str(), NULL);
+#else
+	mkdir(outputFolder.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+#endif
 
 	sock = new Socket(ip, port);
 
@@ -153,8 +165,9 @@ void writeImages(int start, int stop, int step_width)
 		float* data = new float[width * height];
 		sock->receiveImageData(d, data);
 
-		name = outdir + "//Phase_" + std::to_string(d) + ".ext";
+		name = outputFolder + slash + "Phase_" + std::to_string(d) + ".ext";
 		FILE* file = fopen(name.c_str(), "wb");
+
 		fwrite(data, sizeof(float), width * height, file);
 		fclose(file);
 
@@ -170,13 +183,13 @@ void writeImages(int start, int stop, int step_width)
 		normalize(image, image_disp, 0, 255, CV_MINMAX);
 		image_disp.convertTo(B, CV_8U);
 
-		imwrite(outdir + "//Phase_" + std::to_string(d) + ".png", B);
+		imwrite(outputFolder + slash + "Phase_" + std::to_string(d) + ".png", B);
 
 		image.release();
 		delete[] data;
 	}
 
-	name = outdir + "//Phase_MinMax.csv";
+	name = outputFolder + slash + "Phase_MinMax.csv";
 	std::ofstream ofs(name.c_str(), std::ofstream::out);
 	for (int i = 0; i < min_vals.size(); i++)
 	{
@@ -197,7 +210,7 @@ void writeImages(int start, int stop, int step_width)
 		float* data = new float[width * height];
 		sock->receiveImageData(d, data);
 
-		name = outdir + "//Amplitude_" + std::to_string(d) + ".ext";
+		name = outputFolder + slash + "Amplitude_" + std::to_string(d) + ".ext";
 		FILE* file = fopen(name.c_str(), "wb");
 		fwrite(data, sizeof(float), width * height, file);
 		fclose(file);
@@ -214,13 +227,13 @@ void writeImages(int start, int stop, int step_width)
 		normalize(image, image_disp, 0, 255, CV_MINMAX);
 		image_disp.convertTo(B, CV_8U);
 
-		imwrite(outdir + "//Amplitude_" + std::to_string(d) + ".png", B);
+		imwrite(outputFolder + slash + "Amplitude_" + std::to_string(d) + ".png", B);
 
 		image.release();
 		delete[] data;
 	}
 
-	name = outdir + "//Amplitude_MinMax.csv";
+	name = outputFolder + slash + "Amplitude_MinMax.csv";
 	std::ofstream ofs2(name.c_str(), std::ofstream::out);
 	for (int i = 0; i < min_vals.size(); i++)
 	{
@@ -239,7 +252,7 @@ void writeImages(int start, int stop, int step_width)
 		float* data = new float[width * height];
 		sock->receiveImageData(d, data);
 
-		name = outdir + "//Intensity_" + std::to_string(d) + ".ext";
+		name = outputFolder + slash + "Intensity_" + std::to_string(d) + ".ext";
 		FILE* file = fopen(name.c_str(), "wb");
 		fwrite(data, sizeof(float), width * height, file);
 		fclose(file);
@@ -256,13 +269,13 @@ void writeImages(int start, int stop, int step_width)
 		normalize(image, image_disp, 0, 255, CV_MINMAX);
 		image_disp.convertTo(B, CV_8U);
 
-		imwrite(outdir + "//Intensity_" + std::to_string(d) + ".png", B);
+		imwrite(outputFolder + slash + "Intensity_" + std::to_string(d) + ".png", B);
 
 		image.release();
 		delete[] data;
 	}
 
-	name = outdir + "//Intensity_MinMax.csv";
+	name = outputFolder + slash + "Intensity_MinMax.csv";
 	std::ofstream ofs3(name.c_str(), std::ofstream::out);
 	for (int i = 0; i < min_vals.size(); i++)
 	{
@@ -286,23 +299,23 @@ void loadImages(std::vector<cv::Mat> &phase_images,
 			if (!skip_load && online)
 			{
 				sock->receiveImageData(d, data);
-
 			}
 			else
 			{
 				std::string name;
 				if (mode == 2){
-					name = datafolder + "//" + filename + "//Phase_" + std::to_string(d) + ".ext";
+					name = datafolder + slash + filename + slash + "Phase_" + std::to_string(d) + ".ext";
 				} 
 				else if (mode == 1)
 				{
-					name = datafolder + "//" + filename + "//Amplitude_" + std::to_string(d) + ".ext";
+					name = datafolder + slash + filename + slash + "Amplitude_" + std::to_string(d) + ".ext";
 				} 
 				else
 				{
-					name = datafolder + "//" + filename + "//Intensity_" + std::to_string(d) + ".ext";
+					name = datafolder + slash + filename + slash + "Intensity_" + std::to_string(d) + ".ext";
 				}
 				std::cerr << "Load "  << name << std::endl;
+
 				FILE* file = fopen(name.c_str(), "rb");
 				fread(data, sizeof(float), width * height, file);
 				fclose(file);
@@ -343,7 +356,7 @@ void loadImages(std::vector<cv::Mat> &phase_images,
 				cv::Mat B;
 				normalize(image, image_disp, 0, 255, CV_MINMAX);
 				image_disp.convertTo(B, CV_8U);
-				imshow("Loading", B);
+				imshow("Loading", image_disp);
 				cv::waitKey(1);
 				//imwrite("img_" + std::to_string(d) + ".jpg", B);
 			}
@@ -372,6 +385,9 @@ cv::Mat findMaximas(std::vector<cv::Mat> phase_images,
 
 	if (show)
 	{
+		cv::namedWindow("Maximum", cv::WINDOW_NORMAL);
+		cv::resizeWindow("Maximum", 800, 800);
+
 		imshow("Maximum", 0);
 	}
 
@@ -476,7 +492,7 @@ void findContours(std::string outdir, cv::Mat image_maximum, cv::Mat image_maxim
 			imshow("Depths", dst);
 			cvWaitKey(0);
 			destroyWindow("Depths");
-			imwrite(outdir + "//depth.png", dst);
+			imwrite(outdir + slash + "depth.png", dst);
 		}
 	}
 
@@ -509,7 +525,7 @@ void findContours(std::string outdir, cv::Mat image_maximum, cv::Mat image_maxim
 			FONT_HERSHEY_COMPLEX_SMALL, 2, color, 1, CV_AA);
 	}
 
-	imwrite(outdir + "//contours" + ".png", drawing);
+	imwrite(outdir + slash + "contours" + ".png", drawing);
 
 	if (show){
 		imshow("Contours", drawing);
@@ -575,15 +591,15 @@ void saveROI(std::string outdir, std::vector<cv::Rect> bounds, std::vector<int> 
 			
 			std::string name;
 			if (mode == 2){
-				name = datafolder + "//" + filename + "//Phase_" + std::to_string(((long long)d)) + ".ext";
+				name = datafolder + slash + filename + slash + "Phase_" + std::to_string(((long long)d)) + ".ext";
 			}
 			else if (mode == 1)
 			{
-				name = datafolder + "//" + filename + "//Amplitude_" + std::to_string(((long long)d)) + ".ext";
+				name = datafolder + slash + filename + slash + "Amplitude_" + std::to_string(((long long)d)) + ".ext";
 			}
 			else
 			{
-				name = datafolder + "//" + filename + "//Intensity_" + std::to_string(((long long)d)) + ".ext";
+				name = datafolder + slash + filename + slash + "Intensity_" + std::to_string(((long long)d)) + ".ext";
 			}
 			std::cerr << "Load " << name << std::endl;
 
@@ -614,9 +630,9 @@ void saveROI(std::string outdir, std::vector<cv::Rect> bounds, std::vector<int> 
 		image_display.convertTo(drawing, CV_8U);
 
 		if (mode == 1){
-		  imwrite(outdir + "//contours_" + std::to_string(((long long)c)) + ".png", drawing);
+		  imwrite(outdir + slash + "contours_" + std::to_string(((long long)c)) + ".png", drawing);
 		} else if (mode == 2){
-		  imwrite(outdir + "//contoursPhase_" + std::to_string(((long long)c)) + ".png", drawing);
+		  imwrite(outdir + slash + "contoursPhase_" + std::to_string(((long long)c)) + ".png", drawing);
 		}
 
 		if (show)
@@ -635,7 +651,10 @@ void writeReport(std::string outdir, std::vector<cv::Rect> bounds, std::vector<i
 {
 
 	std::ifstream infile;
-	infile.open("template.xml", std::ifstream::in);
+	std::string templateFile = "template.xml";
+	if (!templateFolder.empty()) templateFile = templateFolder + slash + templateFile;
+
+	infile.open(templateFile, std::ifstream::in);
 
 	char * buffer;
 	long size;
@@ -643,7 +662,7 @@ void writeReport(std::string outdir, std::vector<cv::Rect> bounds, std::vector<i
 	// get size of file
 	infile.seekg(0);
 	std::streampos fsize = 0;
-	infile.seekg(0, std::ios::end);
+	infile.seekg(0, infile.end);
 	size = infile.tellg() - fsize;
 	infile.seekg(0);
 
@@ -655,7 +674,7 @@ void writeReport(std::string outdir, std::vector<cv::Rect> bounds, std::vector<i
 
 	infile.close();
 
-	std::ofstream outfile(outdir + "//report.xml", std::ofstream::out);
+	std::ofstream outfile(outdir + slash + "report.xml", std::ofstream::out);
 	// write to outfile
 	std::string buffer_st(buffer);
 	outfile.write(buffer, size);
@@ -744,12 +763,12 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	std::string outdir = outputfolder + "//" + filename;
+	std::string outFile = outputFolder + slash + filename;
 
 #ifdef _MSC_VER
-	CreateDirectory(outdir.c_str(), NULL);
+	CreateDirectory(outFile.c_str(), NULL);
 #else
-	mkdir(outdir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	mkdir(outputFolder.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 #endif
 
 	//establish communication
@@ -787,7 +806,11 @@ int main(int argc, char** argv)
 
 	if (show)
 	{
-		imshow("Loading", 0);
+
+	  cv::namedWindow("Loading", cv::WINDOW_NORMAL);
+	  cv::resizeWindow("Loading", 800, 800);
+
+	  imshow("Loading", 0);
 	}
 
 	////////Load Data
@@ -799,12 +822,12 @@ int main(int argc, char** argv)
 	////////Find Maximas
 	cv::Mat image_maximum = findMaximas(phase_images, depths, min_depth, max_depth, step_size, image_maximumDepth);
 	{
-		std::string name = outdir + "//maximum.ext";
+		std::string name = outputFolder + slash + "maximum.ext";
 		FILE* file = fopen(name.c_str(), "wb");
 		fwrite(image_maximum.data, sizeof(float), width * height, file);
 		fclose(file);
 
-		name = outdir + "//maximumDepth.ext";
+		name = outputFolder + slash + "maximumDepth.ext";
 		file = fopen(name.c_str(), "wb");
 		fwrite(image_maximumDepth.data, sizeof(float), width * height, file);
 		fclose(file);
@@ -816,7 +839,7 @@ int main(int argc, char** argv)
 		normalize(image_maximum, image_disp, 0, 255, CV_MINMAX);
 		image_disp.convertTo(B, CV_8U);
 
-		imwrite(outdir + "//maximum.png", B);
+		imwrite(outputFolder + slash + "maximum.png", B);
 	}
 
 
@@ -825,7 +848,7 @@ int main(int argc, char** argv)
 	std::vector<std::vector<Point> > contours;
 	std::vector<cv::Rect> bounds;
 	
-	findContours(outdir, image_maximum, image_maximumDepth, contours, bounds);
+	findContours(outputFolder, image_maximum, image_maximumDepth, contours, bounds);
 
 ////////Split Bounds
 
@@ -857,7 +880,7 @@ int main(int argc, char** argv)
 				FONT_HERSHEY_COMPLEX_SMALL, 2, color, 1, CV_AA);
 		}
 		
-		imwrite(outdir + "//contours" + ".png", drawing);
+		imwrite(outputFolder + slash + "contours" + ".png", drawing);
 
 		if (show){
 			imshow("Contours", drawing);
@@ -886,19 +909,19 @@ int main(int argc, char** argv)
 			if (!sock->setOutputMode(mode))exit;
 		}
 	}
-	saveROI(outdir, bounds, depths_contour,2);
+	saveROI(outputFolder, bounds, depths_contour,2);
 
 	mode = 1;
 	if (online)
 	{
 		if (!sock->setOutputMode(mode))exit;
 	}
-	saveROI(outdir, bounds, depths_contour,1);
+	saveROI(outputFolder, bounds, depths_contour,1);
 
 ////////Create Report
 	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 
-	writeReport(outdir, bounds, depths_contour, val_contour, std::chrono::duration_cast<std::chrono::minutes>(end - begin).count());
+	writeReport(outputFolder, bounds, depths_contour, val_contour, std::chrono::duration_cast<std::chrono::minutes>(end - begin).count());
 	
 ////////Cleanup
 

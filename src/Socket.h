@@ -24,6 +24,9 @@
 	#include <sys/socket.h>
 	#include <netinet/tcp.h>
 	#include <arpa/inet.h>
+
+#define Sleep(X) usleep(X * 1000)
+
 #endif
 
 

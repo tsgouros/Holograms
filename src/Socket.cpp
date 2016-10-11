@@ -1,5 +1,3 @@
-
-
 #include "Socket.h"
 #include <iostream>
 
@@ -9,9 +7,13 @@
 #endif
 
 #define MAX_FLUSH_CYCLE 10
+#define OCTOTERM "\n0\n"
+
+bool DEBUG = false;
 
 #ifndef WIN32
-// get sockaddr, IPv4 or IPv6:
+
+// Provides a socket address in the appropriate (IPv4 or IPv6) format.
 void *get_in_addr(struct sockaddr *sa)
 {
 	if (sa->sa_family == AF_INET) {
@@ -23,8 +25,7 @@ void *get_in_addr(struct sockaddr *sa)
 
 #endif
 
-
-
+// Create the socket, connected to the given IP and port.
 Socket::Socket(const std::string& serverIP, const std::string& serverPort)
 {
 	printf("client: connecting...\n");
@@ -104,7 +105,8 @@ Socket::Socket(const std::string& serverIP, const std::string& serverPort)
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 
-	if ((rv = getaddrinfo(serverIP.c_str(), serverPort.c_str(), &hints, &servinfo)) != 0) {
+	if ((rv = getaddrinfo(serverIP.c_str(), serverPort.c_str(), 
+			      &hints, &servinfo)) != 0) {
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
 		//return 1;
 		exit(1);
@@ -112,7 +114,8 @@ Socket::Socket(const std::string& serverIP, const std::string& serverPort)
 
 	// loop through all the results and connect to the first we can
 	for (p = servinfo; p != NULL; p = p->ai_next) {
-		if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+		if ((sockfd = socket(p->ai_family, p->ai_socktype, 
+				     p->ai_protocol)) == -1) {
 			perror("client: socket");
 			continue;
 		}
@@ -132,15 +135,28 @@ Socket::Socket(const std::string& serverIP, const std::string& serverPort)
 		exit(2);
 	}
 
-	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof s);
+	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), 
+		  s, sizeof s);
 	printf("client: connected to %s\n", s);
 
 	freeaddrinfo(servinfo); // all done with this structure
 
 	_socketFD = sockfd;
 
+	// Set a timeout.  This was tuned by hand, no idea if optimal.
+	struct timeval tv;
+	tv.tv_sec = 0;
+	tv.tv_usec = 300000;
+	setsockopt(_socketFD, SOL_SOCKET, SO_RCVTIMEO, 
+		   (char *)&tv, sizeof(struct timeval)); 
+
 #endif
-	//set Api version
+
+
+	// Send the API version to the Octopus software.  This is supposed to 
+	// put the software into the special 'receive information through
+	// back door' mode, and should more or less disable the GUI.
+
 	sendMessage("SET_API_VERSION 2\n");
 
 	//clear pipe;
@@ -171,6 +187,8 @@ bool Socket::isConnected()
 
 void Socket::sendMessage(std::string  message)
 {
+  // std::cout << "sending: " << message ;
+
 	const char * message_char = message.c_str();
 	int len = strlen(message_char);
 	int total = 0;        // how many bytes we've sent
@@ -184,6 +202,8 @@ void Socket::sendMessage(std::string  message)
 		total += n;
 		bytesleft -= n;
 	}
+
+  // std::cout << "... done" << std::endl;
 }
 
 std::string Socket::receiveMessage()
@@ -192,7 +212,8 @@ std::string Socket::receiveMessage()
 	char buffer[1024];
 
 	int n;
-	while ((errno = 0, (n = recv(_socketFD, buffer, sizeof(buffer), 0))>0) ||
+	errno = 0;
+	while (((n = recv(_socketFD, buffer, sizeof(buffer), 0))>0) ||
 		errno == EINTR)
 	{
 		if (n > 0){
@@ -280,16 +301,21 @@ void Socket::receiveImageData(int depth, float* data)
 	int datasize = 4 * 2048 * 2048;
 
 	std::string message = "STREAM_RECONSTRUCTION " + std::to_string(depth) + "\n0\n";
-	std::cerr << "Send" <<message << std::endl;
+	if (DEBUG) std::cout << "Send" << message << std::endl;
 	sendMessage(message);
 
 	//receive data
 	std::string expectedReply = "STREAM_RECONSTRUCTION 2048 2048 " + filename + "  " + std::to_string(depth) + " " + std::to_string(format) + "\n" + std::to_string(datasize) + "\n";
 	
+	Sleep(500);
 	receiveMessage(dummyBuffer, expectedReply.size());
+	if (DEBUG) std::cout << "dummyBuffer:" << dummyBuffer << std::endl;
 	std::string reply = std::string(dummyBuffer, expectedReply.size());
-	assert(reply == expectedReply);
-	std::cout << "Receive " << reply << std::endl;
+	if (reply != expectedReply) {
+	  std::cout << "REPLY:" << reply << ":vs XPCT:" << expectedReply << std::endl;
+	  assert(reply == expectedReply);
+	}
+	if (DEBUG) std::cout << "Receive " << reply << std::endl;
 
 	char * dataPtr = (char *) &data[0];
 	datasize = receiveMessage(dataPtr, datasize);
@@ -316,25 +342,30 @@ bool Socket::setOutputMode(int mode)
 
 	std::string reply = std::string(dummyBuffer, message.size());
 
+	if (DEBUG) std::cout << reply << std::endl;
 	assert(reply == message);
 	if (reply != message) return false;
-	std::cout << reply << std::endl;
 	Sleep(500);
+
 	return true;
 }
 
 bool Socket::setImage(std::string folder, std::string _filename)
 {
-	filename = _filename;
+  	filename = _filename;
 	sendMessage("RECONSTRUCT_HOLOGRAMS " + folder + filename + "\n0\n");
 
+	Sleep(10);
 	receiveMessage(&dummyBuffer[0], 26);
 
 	std::string reply = std::string(dummyBuffer,26);
-	assert(reply == "RECONSTRUCT_HOLOGRAMS 1\n0\n");
+	if (reply != "RECONSTRUCT_HOLOGRAMS 1\n0\n") {
+	  std::cout << "REPLY:" << reply << ", expect:" << "RECONSTRUCT_HOLOGRAMS 1\n0\n" << std::endl;
+	  assert(reply == "RECONSTRUCT_HOLOGRAMS 1\n0\n");
+	}
 
 	if (reply != "RECONSTRUCT_HOLOGRAMS 1\n0\n") return false;
 
-	std::cout << reply << std::endl;
+	if (DEBUG) std::cout << reply << std::endl;
 	return true;
 }
