@@ -151,20 +151,9 @@ Socket::Socket(const std::string& serverIP, const std::string& serverPort)
 		   (char *)&tv, sizeof(struct timeval)); 
 
 #endif
-
-
-	// Send the API version to the Octopus software.  This is supposed to 
-	// put the software into the special 'receive information through
-	// back door' mode, and should more or less disable the GUI.
-
-	sendMessage("SET_API_VERSION 2\n");
-
-	//clear pipe;
-	receiveMessage();
 }
 
-Socket::~Socket()
-{
+Socket::~Socket(){
 #ifdef WIN32 
 	closesocket(_socketFD);
 	WSACleanup();
@@ -187,8 +176,6 @@ bool Socket::isConnected()
 
 void Socket::sendMessage(std::string  message)
 {
-  // std::cout << "sending: " << message ;
-
 	const char * message_char = message.c_str();
 	int len = strlen(message_char);
 	int total = 0;        // how many bytes we've sent
@@ -202,30 +189,6 @@ void Socket::sendMessage(std::string  message)
 		total += n;
 		bytesleft -= n;
 	}
-
-  // std::cout << "... done" << std::endl;
-}
-
-std::string Socket::receiveMessage()
-{
-	std::string output;
-	char buffer[1024];
-
-	int n;
-	errno = 0;
-	while (((n = recv(_socketFD, buffer, sizeof(buffer), 0))>0) ||
-		errno == EINTR)
-	{
-		if (n > 0){
-			output.append(buffer, n);
-		}
-		else
-		{
-			break;
-		}
-	}
-
-	return output;
 }
 
 int Socket::receiveMessage(char *buf, int len) {
@@ -245,127 +208,4 @@ int Socket::receiveMessage(char *buf, int len) {
 	return n == -1 ? -1 : total; // return -1 on failure, total on success
 }
 
-cv::Mat Socket::receiveImage()
-{
-	//receive data
-	std::string reply;
-	while (reply.empty()){
-		reply = receiveMessage();
-	}
 
-	//parse data
-	std::vector<std::string> strings;
-	std::string::size_type prev_pos = 0, pos = 0;
-
-	pos = reply.find('\n', pos);
-	strings.push_back(reply.substr(prev_pos, pos - prev_pos));
-	prev_pos = ++pos;
-
-	pos = reply.find('\n', pos);
-	strings.push_back(reply.substr(prev_pos, pos - prev_pos));
-	prev_pos = ++pos;
-
-	strings.push_back(reply.substr(prev_pos, reply.size() - prev_pos));
-
-	int width = atoi(strings[0].substr(22, 4).c_str());
-	int height = atoi(strings[0].substr(27, 4).c_str());
-	int datasize = atoi(strings[1].c_str());
-
-	//convert endianess
-	char* data = new char[datasize];
-	char* dataBigEndian = const_cast<char*> (strings[2].c_str());
-
-	int * ptr_org = (int*)dataBigEndian;
-	int * ptr_dest = (int*)data;
-
-	for (int i = 0; i < datasize / 4; i++, ptr_org++, ptr_dest++)
-	{
-		*ptr_dest = (*ptr_org << 24) |
-			((*ptr_org << 8) & 0x00ff0000) |
-			((*ptr_org >> 8) & 0x0000ff00) |
-			((*ptr_org >> 24) & 0x000000ff);
-	}
-
-	cv::Mat image(cv::Size(width, height), CV_32FC1, (float*)data); 
-	//we clone so that we can delete the data array
-	cv::Mat out_image = image.clone();
-
-	//delete data
-	delete[] data;
-
-	return out_image;
-}
-
-void Socket::receiveImageData(int depth, float* data)
-{
-	int datasize = 4 * 2048 * 2048;
-
-	std::string message = "STREAM_RECONSTRUCTION " + std::to_string(depth) + "\n0\n";
-	if (DEBUG) std::cout << "Send" << message << std::endl;
-	sendMessage(message);
-
-	//receive data
-	std::string expectedReply = "STREAM_RECONSTRUCTION 2048 2048 " + filename + "  " + std::to_string(depth) + " " + std::to_string(format) + "\n" + std::to_string(datasize) + "\n";
-	
-	Sleep(500);
-	receiveMessage(dummyBuffer, expectedReply.size());
-	if (DEBUG) std::cout << "dummyBuffer:" << dummyBuffer << std::endl;
-	std::string reply = std::string(dummyBuffer, expectedReply.size());
-	if (reply != expectedReply) {
-	  std::cout << "REPLY:" << reply << ":vs XPCT:" << expectedReply << std::endl;
-	  assert(reply == expectedReply);
-	}
-	if (DEBUG) std::cout << "Receive " << reply << std::endl;
-
-	char * dataPtr = (char *) &data[0];
-	datasize = receiveMessage(dataPtr, datasize);
-
-	int * ptr_org = (int*) &data[0];
-	int * ptr_dest = (int*) &data[0];
-
-	for (int i = 0; i < datasize / 4; i++, ptr_org++, ptr_dest++)
-	{
-		*ptr_dest = (*ptr_org << 24) |
-			((*ptr_org << 8) & 0x00ff0000) |
-			((*ptr_org >> 8) & 0x0000ff00) |
-			((*ptr_org >> 24) & 0x000000ff);
-	}
-}
-
-bool Socket::setOutputMode(int mode)
-{
-	format = mode;
-	std::string message = "OUTPUT_MODE " + std::to_string(mode) + "\n0\n";
-	sendMessage(message);
-
-	receiveMessage(&dummyBuffer[0], message.size());
-
-	std::string reply = std::string(dummyBuffer, message.size());
-
-	if (DEBUG) std::cout << reply << std::endl;
-	assert(reply == message);
-	if (reply != message) return false;
-	Sleep(500);
-
-	return true;
-}
-
-bool Socket::setImage(std::string folder, std::string _filename)
-{
-  	filename = _filename;
-	sendMessage("RECONSTRUCT_HOLOGRAMS " + folder + filename + "\n0\n");
-
-	Sleep(10);
-	receiveMessage(&dummyBuffer[0], 26);
-
-	std::string reply = std::string(dummyBuffer,26);
-	if (reply != "RECONSTRUCT_HOLOGRAMS 1\n0\n") {
-	  std::cout << "REPLY:" << reply << ", expect:" << "RECONSTRUCT_HOLOGRAMS 1\n0\n" << std::endl;
-	  assert(reply == "RECONSTRUCT_HOLOGRAMS 1\n0\n");
-	}
-
-	if (reply != "RECONSTRUCT_HOLOGRAMS 1\n0\n") return false;
-
-	if (DEBUG) std::cout << reply << std::endl;
-	return true;
-}

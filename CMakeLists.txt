@@ -59,20 +59,39 @@ INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR} ${Op
 #SET GENERIC HEADER AND SOURCE FILES
 SET(HEADERS 
 	src/Socket.h
+	src/OctopusClient.h
+	src/OfflineReader.h
+	src/ImageSource.h
+	src/ImageCache.h
+	src/ReportWriter.h
+	src/tinyxml2.h
+	src/Settings.h
 )
 
 SET(SOURCES
-	src/main.cpp
 	src/Socket.cpp
+	src/OfflineReader.cpp
+	src/OctopusClient.cpp
+	src/ImageCache.cpp
+	src/ReportWriter.cpp
+	src/tinyxml2.cpp
+	src/Settings.cpp
 )
 
-SOURCE_GROUP(_CORE FILES ${HEADERS} ${SOURCES})
+SOURCE_GROUP(_CORE FILES ${HEADERS} ${SOURCES} )
 
 SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/bin)
 
 
 #BUILD AND LINK
 ADD_EXECUTABLE(${PROJECT_NAME} ${GUI_TYPE}
+		src/main.cpp
+		${SOURCES} 
+		${HEADERS}
+)
+
+ADD_EXECUTABLE(writeImages ${GUI_TYPE}
+		src/writeImages.cpp
 		${SOURCES} 
 		${HEADERS}
 )
@@ -81,3 +100,4 @@ IF (APPLE)
   add_dependencies(${PROJECT_NAME} osx_bundle_dirs )
 ENDIF (APPLE)
 TARGET_LINK_LIBRARIES(${PROJECT_NAME} ${OpenCV_LIBS})
+TARGET_LINK_LIBRARIES(writeImages ${OpenCV_LIBS})

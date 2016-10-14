@@ -1,0 +1,29 @@
+<Settings>
+	<datafolder>C:/Holograms</datafolder>
+	<outputFolder>H:/offline_holograms</outputFolder>
+	<templateFolder></templateFolder>
+	
+	<online>0</online>
+	<ip>10.12.160.99</ip>
+	<port>1975</port>
+	
+	<show>1</show>
+
+	<useAbs>1</useAbs>
+	<step_size>100</step_size>
+	<min_depth>1000</min_depth>
+	<max_depth>25000</max_depth>
+	<width>2048</width>
+	<height>2048</height>
+
+	<doRefine>0</doRefine>
+
+	<windowsize>5</windowsize>
+
+	<max_threshold>0.35</max_threshold>
+	<contour_minArea>10.0</contour_minArea>
+
+	<doMergebounds>1</doMergebounds>
+	<merge_threshold_depth>400</merge_threshold_depth>
+	<merge_threshold_dist>50</merge_threshold_dist>
+</Settings>

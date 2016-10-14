@@ -2,7 +2,6 @@
 #define SOCKET_H
 
 #include <string>
-#include <opencv2/core/core.hpp>
 
 #ifdef WIN32
 	#include <winsock2.h>
@@ -26,7 +25,6 @@
 	#include <arpa/inet.h>
 
 #define Sleep(X) usleep(X * 1000)
-
 #endif
 
 
@@ -38,19 +36,11 @@ public:
 
 	bool isConnected();
 	void sendMessage(std::string);
-	std::string receiveMessage();
 	int receiveMessage(char *buf, int len);
-	cv::Mat receiveImage();
-	void receiveImageData(int depth, float* data);
-	bool setOutputMode(int mode);
-	bool setImage(std::string folder, std::string filename);
-
+	SOCKET* getSocketFD(){ return &_socketFD;}
 private:
 
 	SOCKET _socketFD;
-	char dummyBuffer[1024];
-	std::string filename;
-	int format;
 };
 
 
