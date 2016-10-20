@@ -281,7 +281,8 @@ int main(int argc, char** argv)
 #ifdef _MSC_VER
 	CreateDirectory(outFile.c_str(), NULL);
 #else
-	mkdir(outputFolder.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	mkdir(settings->getOutputFolder().c_str(), 
+	      S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 #endif
 
 	//setup ReportWriter

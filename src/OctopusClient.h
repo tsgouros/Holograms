@@ -19,7 +19,7 @@ public:
 	virtual void getAmplitudeImage(int depth, float* data);
 
 private:
-	void OctopusClient::receiveImageData(int depth, float* data);
+	void receiveImageData(int depth, float* data);
 	bool setOutputMode(int mode);
 
 	int m_mode;

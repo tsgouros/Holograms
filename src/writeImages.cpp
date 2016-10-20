@@ -40,7 +40,7 @@ void writeImages(std::string filename, Settings * settings)
 	CreateDirectory(settings->getOutputFolder().c_str(), NULL);
 	CreateDirectory(outFile.c_str(), NULL);
 #else
-	mkdir(outputFolder.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	mkdir(settings->getOutputFolder().c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 #endif
 
 	OctopusClient * client = new OctopusClient(settings->getIp(), settings->getPort());
